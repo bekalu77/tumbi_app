@@ -8,6 +8,7 @@ backend/.env
 
 # Build output
 dist
+backend/dist
 build
 
 # Logs
