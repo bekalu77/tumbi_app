@@ -5,7 +5,7 @@ import { Listing, ViewState, User, ChatSession } from './types';
 import { ListingCard, CategoryPill, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView } from './components/Components';
 import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon } from './components/Icons';
 
-const API_URL = 'http://localhost:3001/api';
+const API_URL = 'https://tumbi-app-backend.onrender.com/api';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -188,13 +188,17 @@ export default function App() {
       const conversationData = await res.json();
       if (!res.ok) throw new Error(conversationData.message);
       
+      const firstImage = Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0 ? listing.imageUrls[0] : '';
+
       setActiveChat({
           conversationId: conversationData.id,
           listingId: listing.id,
           listingTitle: listing.title,
-          listingImage: listing.imageUrls ? `http://localhost:3001${listing.imageUrls.split(',')[0]}` : '' ,
-          otherUserId: listing.sellerId,
+          listingImage: firstImage,
+          otherUserId: listing.sellerId as string,
           otherUserName: listing.sellerName,
+          lastMessage: '', // these are not available when starting a new chat
+          lastMessageDate: new Date(),
       });
 
       setViewState('chat-conversation');

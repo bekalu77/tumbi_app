@@ -18,9 +18,9 @@ export interface Listing {
   unit: string;
   location: string;
   category: string;
-  type: ListingType;
+  listingType: ListingType;
   description: string;
-  imageUrl: string;
+  imageUrls: string[];
   createdAt: Date;
   sellerName: string;
   sellerId?: string;
@@ -37,16 +37,16 @@ export interface Category {
 
 export interface Message {
   id: string;
-  listingId: string;
-  senderId: string;
-  receiverId: string;
+  conversation_id: string;
+  sender_id: string;
+  receiver_id: string;
   content: string;
   timestamp: Date;
 }
 
 // Helper type for the Messages List view
 export interface ChatSession {
-  key: string; // Unique combination of listingId + otherUserId
+  conversationId: string; 
   listingId: string;
   otherUserId: string;
   otherUserName: string;
@@ -56,4 +56,4 @@ export interface ChatSession {
   lastMessageDate: Date;
 }
 
-export type ViewState = 'home' | 'sell' | 'edit' | 'details' | 'saved' | 'messages' | 'chat-conversation' | 'profile';
+export type ViewState = 'home' | 'sell' | 'edit' | 'details' | 'saved' | 'messages' | 'chat-conversation' | 'profile' | 'register';
