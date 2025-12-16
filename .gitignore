@@ -3,7 +3,7 @@
 /backend/node_modules
 
 # Local Environment Variables
-.env
+.env*
 backend/.env
 
 # Build output

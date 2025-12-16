@@ -5,7 +5,7 @@ import { Listing, ViewState, User, ChatSession } from './types';
 import { ListingCard, CategoryPill, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView } from './components/Components';
 import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon } from './components/Icons';
 
-const API_URL = 'https://tumbi-app-backend.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);

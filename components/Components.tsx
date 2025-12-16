@@ -4,7 +4,7 @@ import { Listing, Category, User, Message, ChatSession } from '../types';
 import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, HeartIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons';
 import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, MEASUREMENT_UNITS } from '../constants';
 
-const API_URL = 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // --- Auth Modal ---
 export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onAuthSuccess: (data: { auth: boolean, token: string, user: User }) => void }) => {
