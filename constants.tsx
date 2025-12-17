@@ -1,12 +1,12 @@
 import React from 'react';
-import { Listing, Category } from './types';
-import { HammerIcon, WrenchIcon, TruckIcon, HomeIcon } from './components/Icons';
+import { Category } from './types';
+import { HammerIcon, HomeIcon } from './components/Icons';
 
 export const CATEGORIES: Category[] = [
   { id: '1', name: 'All', slug: 'all', icon: <HomeIcon className="w-5 h-5" /> },
   { id: '2', name: 'Materials', slug: 'materials', icon: <HammerIcon className="w-5 h-5" /> },
-  { id: '3', name: 'Services', slug: 'services', icon: <WrenchIcon className="w-5 h-5" /> },
-  { id: '4', name: 'Equipment', slug: 'equipment', icon: <TruckIcon className="w-5 h-5" /> },
+  { id: '3', name: 'Services', slug: 'services', icon: <HammerIcon className="w-5 h-5" /> },
+  { id: '4', name: 'Equipment', slug: 'equipment', icon: <HammerIcon className="w-5 h-5" /> },
 ];
 
 export const PRODUCT_CATEGORIES = [

@@ -122,7 +122,7 @@ export const ChevronLeftIcon = ({ className = 'w-6 h-6' }) => (
 );
 
 export const ChevronRightIcon = ({ className = 'w-6 h-6' }) => (
-    <svg xmlns="http://www.w.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
         <path d="m9 18 6-6-6-6" />
     </svg>
 );
@@ -144,5 +144,20 @@ export const SunIcon = ({ className = 'w-6 h-6' }) => (
 export const MoonIcon = ({ className = 'w-6 h-6' }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
         <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+    </svg>
+);
+
+export const WrenchIcon = ({ className = 'w-6 h-6' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
+);
+
+export const TruckIcon = ({ className = 'w-6 h-6' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
+        <path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11"/>
+        <path d="M14 9h4l4 4v4c0 .6-.4 1-1 1h-2"/>
+        <circle cx="7" cy="18" r="2"/>
+        <circle cx="17" cy="18" r="2"/>
     </svg>
 );
