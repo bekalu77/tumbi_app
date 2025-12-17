@@ -7,7 +7,7 @@ compatibility_date = "2024-04-05"
 # You will set the actual values for these in the Cloudflare dashboard under
 # Workers & Pages > your_worker > Settings > Variables
 
-[[vars]]
+[vars]
 DATABASE_URL = "your_neon_database_url_here"
 JWT_SECRET = "your_super_secret_jwt_key_here"
 
