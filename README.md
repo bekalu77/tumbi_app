@@ -42,7 +42,13 @@ Your backend deployment is now automated. Your secrets are stored in the `backen
 
 Once the backend is live, deploy your frontend.
 
-1.  **Push to GitHub:** Ensure all your latest code is pushed to your GitHub repository.
+1.  **Commit and Push to GitHub:** Make sure all your latest code is committed and pushed to your GitHub repository.
+
+    ```bash
+    git add .
+    git commit -m "Prepare for frontend deployment"
+    git push
+    ```
 
 2.  **Configure Vercel:**
     *   Connect your GitHub repository to a new Vercel project.
