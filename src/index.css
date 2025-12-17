@@ -1,3 +1,34 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+	--bg: #f8fafc;
+	--card: #ffffff;
+	--text: #0f1724;
+	--muted: #6b7280;
+}
+
+.dark {
+	--bg: #071024;
+	--card: #0b1a2a;
+	--text: #e6f0fb;
+	--muted: #9fb0c4;
+}
+
+html, body, #root {
+	background-color: var(--bg);
+	color: var(--text);
+	transition: background-color 250ms ease, color 250ms ease;
+}
+
+/* Theme toggle specific tweaks */
+.theme-toggle {
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* Make images and cards pop in both themes */
+.card-surface {
+	background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.02));
+}
+

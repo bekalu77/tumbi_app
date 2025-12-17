@@ -3,7 +3,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { CATEGORIES, PRODUCT_CATEGORIES, SERVICE_CATEGORIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
 import { ListingCard, CategoryPill, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, RecommendedCard } from './components/Components';
-import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon, SunIcon, MoonIcon } from './components/Icons';
+import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon } from './components/Icons';
+import ThemeToggle from './components/ThemeToggle';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -122,53 +123,66 @@ export default function App() {
       setIsListingsLoading(false);
       return;
     }
+
+    const isEditing = !!editingListing;
+
     try {
-      const photoFormData = new FormData();
-      photos.forEach(photo => {
-        photoFormData.append('photos', photo);
-      });
+        let imageUrls = isEditing ? editingListing.imageUrls : [];
 
-      const uploadRes = await fetch(`${API_URL}/api/upload`, {
-        method: 'POST',
-        headers: { 'x-access-token': token },
-        body: photoFormData,
-      });
+        if (photos.length > 0) {
+            const photoFormData = new FormData();
+            photos.forEach(photo => {
+                photoFormData.append('photos', photo);
+            });
 
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) {
-        throw new Error(uploadData.message || 'Failed to upload images');
-      }
+            const uploadRes = await fetch(`${API_URL}/api/upload`, {
+                method: 'POST',
+                headers: { 'x-access-token': token },
+                body: photoFormData,
+            });
 
-      const listingData = { ...data, imageUrls: uploadData.urls };
-
-      const listingRes = await fetch(`${API_URL}/api/listings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-access-token': token,
-        },
-        body: JSON.stringify(listingData),
-      });
-
-      const newListingData = await listingRes.json();
-      if (!listingRes.ok) {
-        if (listingRes.status === 401) {
-          handleLogout();
-          setShowAuth(true);
+            const uploadData = await uploadRes.json();
+            if (!uploadRes.ok) {
+                throw new Error(uploadData.message || 'Failed to upload images');
+            }
+            imageUrls = uploadData.urls;
         }
-        throw new Error(newListingData.message || 'Failed to create listing');
-      }
 
-      alert('Listing created successfully!');
-      await fetchListings();
-      setViewState('home');
+        const listingData = { ...data, imageUrls };
+
+        const endpoint = isEditing ? `${API_URL}/api/listings/${editingListing.id}` : `${API_URL}/api/listings`;
+        const method = isEditing ? 'PUT' : 'POST';
+
+        const listingRes = await fetch(endpoint, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'x-access-token': token,
+            },
+            body: JSON.stringify(listingData),
+        });
+
+        const responseData = await listingRes.json();
+        if (!listingRes.ok) {
+            if (listingRes.status === 401) {
+                handleLogout();
+                setShowAuth(true);
+            }
+            throw new Error(responseData.message || `Failed to ${isEditing ? 'update' : 'create'} listing`);
+        }
+
+        alert(`Listing ${isEditing ? 'updated' : 'created'} successfully!`);
+        await fetchListings();
+        setViewState('home');
+        setEditingListing(undefined);
+
     } catch (error: any) {
-      console.error("Error saving listing:", error);
-      alert(`Error: ${error.message}`);
+        console.error("Error saving listing:", error);
+        alert(`Error: ${error.message}`);
     } finally {
-      setIsListingsLoading(false);
+        setIsListingsLoading(false);
     }
-  };
+};
 
   const openListing = (id: string) => {
     setSelectedListingId(id.toString());
@@ -255,9 +269,10 @@ export default function App() {
                     <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={() => setViewState('home')}>
                         <h1 className="text-xl font-bold tracking-tight">Tumbi</h1>
                     </div>
-                    <button onClick={toggleDarkMode} className="p-2 rounded-full text-white/80 hover:bg-white/20">
-                        {isDarkMode ? <SunIcon className="w-5 h-5" /> : <MoonIcon className="w-5 h-5" />}
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-white/90 hidden sm:block">{isDarkMode ? 'Dark' : 'Light'}</span>
+                      <ThemeToggle isDark={isDarkMode} toggle={toggleDarkMode} />
+                    </div>
                 </div>
 
                 <form onSubmit={handleSearch} className="flex space-x-2">
