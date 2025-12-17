@@ -141,8 +141,9 @@ app.post('/api/upload', async (c) => {
                 await c.env.R2_BUCKET.put(uniqueName, await photo.arrayBuffer(), {
                     httpMetadata: { contentType: photo.type },
                 });
-                // Construct the public URL
-                const publicUrl = c.req.url.replace(/\/upload$/, '') + `/uploads/${uniqueName}`;
+                // Construct the public URL using the request origin so the path is always '/uploads/<key>'
+                const origin = new URL(c.req.url).origin;
+                const publicUrl = `${origin}/uploads/${uniqueName}`;
                 filePaths.push(publicUrl);
             } catch (err: any) {
                 console.error('R2 Upload Error:', err.message);

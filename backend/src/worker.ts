@@ -48,7 +48,7 @@ app.use('/api/*', async (c, next) => {
             return c.json({ auth: false, message: 'User not found.' }, 401);
         }
 
-        c.set('user', user); // Pass user to the next middleware
+        c.set('jwtPayload', user); // Pass user to the next middleware
         await next();
     } catch (err) {
         return c.json({ auth: false, message: 'Your session is invalid. Please log in again.' }, 401);
@@ -132,7 +132,7 @@ app.post('/api/login', async (c) => {
 app.post('/api/upload', async (c) => {
     const formData = await c.req.formData();
     const photos = formData.getAll('photos');
-    const user = c.get('user');
+    const user = c.get('jwtPayload');
 
     if (!photos || photos.length === 0) {
         return c.json({ message: 'No files were uploaded.' }, 400);
@@ -143,13 +143,14 @@ app.post('/api/upload', async (c) => {
     const baseUrl = `${url.protocol}//${url.host}`;
 
     for (const photo of photos) {
-        if (photo instanceof File) {
-            const uniqueName = `${user.id}-${Date.now()}-${photo.name}`;
+        if (photo && typeof (photo as any).arrayBuffer === 'function') {
+            const f = photo as any;
+            const uniqueName = `${(user as any).id}-${Date.now()}-${f.name}`;
             try {
-                await c.env.R2_BUCKET.put(uniqueName, await photo.arrayBuffer(), {
-                    httpMetadata: { contentType: photo.type },
+                await c.env.R2_BUCKET.put(uniqueName, await f.arrayBuffer(), {
+                    httpMetadata: { contentType: f.type },
                 });
-                const publicUrl = `${baseUrl}/api/uploads/${uniqueName}`;
+                const publicUrl = `${baseUrl}/uploads/${uniqueName}`;
                 filePaths.push(publicUrl);
             } catch (err: any) {
                 console.error('R2 Upload Error:', err.message);
@@ -162,7 +163,7 @@ app.post('/api/upload', async (c) => {
 });
 
 // Serve uploaded files from R2
-app.get('/api/uploads/:key', async (c) => {
+app.get('/uploads/:key', async (c) => {
     const key = c.req.param('key');
     const object = await c.env.R2_BUCKET.get(key);
 
@@ -215,7 +216,7 @@ app.get('/api/listings', async (c) => {
 });
 
 app.post('/api/listings', async (c) => {
-    const user = c.get('user');
+    const user = c.get('jwtPayload');
     const body = await c.req.json();
     const { title, price, unit, location, category, listingType, description, imageUrls } = body;
 
@@ -229,7 +230,7 @@ app.post('/api/listings', async (c) => {
     try {
         const result = await pool.query(
             'INSERT INTO listings (title, price, unit, location, category_slug, listing_type, description, image_url, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
-            [title, price, unit, location, category, listingType, description, imageUrlsString, user.id]
+            [title, price, unit, location, category, listingType, description, imageUrlsString, (user as any).id]
         );
         return c.json({ message: 'Listing created successfully!', listingId: result.rows[0].id }, 201);
     } catch (error: any) {
@@ -238,13 +239,43 @@ app.post('/api/listings', async (c) => {
     }
 });
 
+app.put('/api/listings/:id', async (c) => {
+    const user = c.get('jwtPayload');
+    const listingId = c.req.param('id');
+    const body = await c.req.json();
+    const { title, price, unit, location, category, listingType, description, imageUrls } = body;
+
+    if (!title || price === undefined || !unit || !location || !category || !listingType || !description || !imageUrls) {
+        return c.json({ message: "All fields are required to update a listing." }, 400);
+    }
+
+    const imageUrlsString = imageUrls.join(',');
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+
+    try {
+        const result = await pool.query(
+            'UPDATE listings SET title = $1, price = $2, unit = $3, location = $4, category_slug = $5, listing_type = $6, description = $7, image_url = $8 WHERE id = $9 AND user_id = $10 RETURNING id',
+            [title, price, unit, location, category, listingType, description, imageUrlsString, listingId, (user as any).id]
+        );
+
+        if (result.rowCount === 0) {
+            return c.json({ message: "Listing not found or you don't have permission to edit it." }, 404);
+        }
+
+        return c.json({ message: 'Listing updated successfully!', listingId: result.rows[0].id });
+    } catch (error: any) {
+        console.error("CRITICAL: Error updating listing:", error);
+        return c.json({ message: 'A server error occurred while updating the listing.', error: error.message }, 500);
+    }
+});
+
 
 // --- CHAT ROUTES ---
 
 app.post('/api/conversations', async (c) => {
-    const user = c.get('user');
+    const user = c.get('jwtPayload');
     const { listingId } = await c.req.json();
-    const buyerId = user.id;
+    const buyerId = (user as any).id;
 
     const pool = new Pool({ connectionString: c.env.DATABASE_URL });
 
@@ -271,8 +302,8 @@ app.post('/api/conversations', async (c) => {
 });
 
 app.get('/api/conversations', async (c) => {
-    const user = c.get('user');
-    const userId = user.id;
+    const user = c.get('jwtPayload');
+    const userId = (user as any).id;
     const pool = new Pool({ connectionString: c.env.DATABASE_URL });
 
     try {
@@ -316,8 +347,8 @@ app.get('/api/conversations/:id/messages', async (c) => {
 });
 
 app.post('/api/messages', async (c) => {
-    const user = c.get('user');
-    const senderId = user.id;
+    const user = c.get('jwtPayload');
+    const senderId = (user as any).id;
     const { conversationId, receiverId, content } = await c.req.json();
 
     if (!conversationId || !receiverId || !content) {
