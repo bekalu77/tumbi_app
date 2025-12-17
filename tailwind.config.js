@@ -1,6 +1,7 @@
 
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./{components,services,src}/**/*.{js,ts,jsx,tsx}",
@@ -22,6 +23,13 @@ export default {
           900: '#2b4f5b',
           950: '#1a323c',
         },
+        dark: {
+          bg: '#1a1a1a', // Main background
+          card: '#2c2c2c', // Card background
+          border: '#3a3a3a', // Border color
+          text: '#e0e0e0', // Primary text
+          subtext: '#a0a0a0', // Secondary text
+        }
       }
     },
   },

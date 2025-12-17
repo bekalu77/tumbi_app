@@ -1,124 +1,334 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { Pool } from '@neondatabase/serverless';
+import bcrypt from 'bcryptjs';
+import { sign, verify } from 'hono/jwt';
 
-// Types for Environment Variables (Set these in Cloudflare Dashboard)
+// Define the environment bindings
+// These are set in your Cloudflare dashboard (or wrangler.toml for local dev)
 type Bindings = {
-  DATABASE_URL: string;
-  R2_BUCKET: any;
-  R2_PUBLIC_URL: string;
-};
+    DATABASE_URL: string;
+    JWT_SECRET: string;
+    R2_BUCKET: R2Bucket;
+}
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// Enable CORS for your Android App/Web App
-app.use('/*', cors());
+// --- MIDDLEWARE ---
+app.use('/*', cors()); // Enable CORS for all routes
 
-// --- Database Helper ---
-const getDb = (url: string) => new Pool({ connectionString: url });
+// Auth middleware to protect routes
+app.use('/api/*', async (c, next) => {
+    if (c.req.path === '/api/register' || c.req.path === '/api/login' || c.req.path === '/api/listings') {
+        return next();
+    }
 
-// --- Routes ---
+    const authHeader = c.req.header('x-access-token');
+    if (!authHeader) {
+        return c.json({ auth: false, message: 'No token provided.' }, 401);
+    }
 
-app.get('/', (c) => c.text('Tumbi API is Running!'));
+    try {
+        const decoded = await verify(authHeader, c.env.JWT_SECRET);
+        if (!decoded || !decoded.id) {
+             throw new Error("Invalid token payload");
+        }
 
-// 1. Get Listings
-app.get('/api/listings', async (c) => {
-    const pool = getDb(c.env.DATABASE_URL);
-    // Join with users to get seller name
-    const result = await pool.query(`
-        SELECT l.*, u.name as seller_name, u.phone as seller_phone 
-        FROM listings l 
-        LEFT JOIN users u ON l.seller_id = u.id 
-        ORDER BY l.created_at DESC
-    `);
-    
-    // Map snake_case DB to camelCase JS
-    const listings = result.rows.map(row => ({
-        id: row.id,
-        title: row.title,
-        price: parseFloat(row.price),
-        unit: row.unit,
-        location: row.location,
-        category: row.category,
-        type: row.type,
-        description: row.description,
-        imageUrl: row.image_url,
-        createdAt: row.created_at,
-        sellerId: row.seller_id,
-        sellerName: row.seller_name,
-        sellerPhone: row.seller_phone,
-        isVerified: row.is_verified
-    }));
-    
-    return c.json(listings);
+        const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+        const { rows } = await pool.query('SELECT id, name, email, location, phone FROM users WHERE id = $1', [decoded.id]);
+        const user = rows[0];
+
+        if (!user) {
+            return c.json({ auth: false, message: 'User not found.' }, 401);
+        }
+
+        c.set('user', user); // Pass user to the next middleware
+        await next();
+    } catch (err) {
+        return c.json({ auth: false, message: 'Your session is invalid. Please log in again.' }, 401);
+    }
 });
 
-// 2. Create Listing
-app.post('/api/listings', async (c) => {
+
+// --- DATABASE HELPERS (to be refactored) ---
+// In a real app, you'd abstract this logic, but for a single file, this is okay.
+
+
+// --- AUTH ROUTES ---
+
+app.post('/api/register', async (c) => {
     const body = await c.req.json();
-    const pool = getDb(c.env.DATABASE_URL);
-    
-    // In real app, ensure User exists first
-    await pool.query(`
-        INSERT INTO listings (id, title, price, unit, location, category, type, description, image_url, seller_id, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-    `, [body.id, body.title, body.price, body.unit, body.location, body.category, body.type, body.description, body.imageUrl, body.sellerId]);
-    
-    return c.json({ success: true, id: body.id });
+    const { name, email, phone, password, location } = body;
+
+    if (!name || !email || !password) {
+        return c.json({ message: 'Name, email, and password are required' }, 400);
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+
+    try {
+        const result = await pool.query(
+            'INSERT INTO users (name, email, phone, password, location) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, phone, location',
+            [name, email, phone, hashedPassword, location]
+        );
+        const user = result.rows[0];
+        const token = await sign({ id: user.id }, c.env.JWT_SECRET);
+
+        return c.json({ auth: true, token, user });
+    } catch (error: any) {
+        console.error("Registration Error:", error.message);
+        if (error.message.includes('users_email_key')) { // Unique constraint violation
+             return c.json({ message: 'An account with this email already exists.' }, 409);
+        }
+        return c.json({ message: 'Error registering user', error: error.message }, 500);
+    }
 });
 
-// 3. Get Messages
-app.get('/api/messages', async (c) => {
-    const listingId = c.req.query('listingId');
-    const userId = c.req.query('userId');
-    const otherId = c.req.query('otherId');
-    
-    const pool = getDb(c.env.DATABASE_URL);
-    const result = await pool.query(`
-        SELECT * FROM messages 
-        WHERE listing_id = $1 
-        AND ((sender_id = $2 AND receiver_id = $3) OR (sender_id = $3 AND receiver_id = $2))
-        ORDER BY timestamp ASC
-    `, [listingId, userId, otherId]);
-    
-    return c.json(result.rows.map(row => ({
-        id: row.id,
-        listingId: row.listing_id,
-        senderId: row.sender_id,
-        receiverId: row.receiver_id,
-        content: row.content,
-        timestamp: row.timestamp
-    })));
-});
-
-// 4. Send Message
-app.post('/api/messages', async (c) => {
+app.post('/api/login', async (c) => {
     const body = await c.req.json();
-    const pool = getDb(c.env.DATABASE_URL);
-    const id = crypto.randomUUID();
-    
-    await pool.query(`
-        INSERT INTO messages (id, listing_id, sender_id, receiver_id, content, timestamp)
-        VALUES ($1, $2, $3, $4, $5, NOW())
-    `, [id, body.listingId, body.senderId, body.receiverId, body.content]);
-    
-    return c.json({ ...body, id });
+    const { email, password } = body;
+
+    if (!email || !password) {
+        return c.json({ message: 'Email and password are required' }, 400);
+    }
+
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+
+    try {
+        const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        const user = rows[0];
+
+        if (!user) {
+            return c.json({ message: 'User not found' }, 404);
+        }
+
+        const passwordIsValid = await bcrypt.compare(password, user.password);
+
+        if (!passwordIsValid) {
+            return c.json({ auth: false, token: null, message: 'Invalid password' }, 401);
+        }
+
+        const token = await sign({ id: user.id }, c.env.JWT_SECRET);
+        
+        // Don't send the password back to the client
+        const { password: _, ...userWithoutPassword } = user;
+
+        return c.json({ auth: true, token, user: userWithoutPassword });
+    } catch (error: any) {
+        return c.json({ message: 'Error logging in', error: error.message }, 500);
+    }
 });
 
-// 5. Generate R2 Presigned URL (For Image Uploads)
-app.post('/api/upload-url', async (c) => {
-    const { filename, contentType } = await c.req.json();
-    const key = `uploads/${crypto.randomUUID()}-${filename}`;
-    
-    // In a real Worker, use the R2 binding to generate a signed PUT URL
-    // For this example, we'll return a dummy one or you implement the specific PutObjectCommand
-    // const signedUrl = await getSignedUrl(c.env.R2_BUCKET, key...);
-    
-    // For now, returning structure:
-    return c.json({
-        uploadUrl: `https://fake-signed-url/${key}`, // You need AWS SDK v3 here for R2 signing
-        publicUrl: `${c.env.R2_PUBLIC_URL}/${key}`
+
+// --- IMAGE UPLOAD ROUTE ---
+
+app.post('/api/upload', async (c) => {
+    const formData = await c.req.formData();
+    const photos = formData.getAll('photos');
+    const user = c.get('user');
+
+    if (!photos || photos.length === 0) {
+        return c.json({ message: 'No files were uploaded.' }, 400);
+    }
+
+    const filePaths: string[] = [];
+
+    for (const photo of photos) {
+        if (photo instanceof File) {
+            const uniqueName = `${user.id}-${Date.now()}-${photo.name}`;
+            try {
+                await c.env.R2_BUCKET.put(uniqueName, await photo.arrayBuffer(), {
+                    httpMetadata: { contentType: photo.type },
+                });
+                // Construct the public URL
+                const publicUrl = c.req.url.replace(/\/upload$/, '') + `/uploads/${uniqueName}`;
+                filePaths.push(publicUrl);
+            } catch (err: any) {
+                console.error('R2 Upload Error:', err.message);
+                return c.json({ message: 'Failed to upload one or more files.' }, 500);
+            }
+        }
+    }
+
+    return c.json({ message: 'Files uploaded successfully', urls: filePaths });
+});
+
+// Serve uploaded files from R2
+app.get('/uploads/:key', async (c) => {
+    const key = c.req.param('key');
+    const object = await c.env.R2_BUCKET.get(key);
+
+    if (object === null) {
+        return c.notFound();
+    }
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set('etag', object.httpEtag);
+
+    return new Response(object.body, {
+        headers,
     });
 });
+
+
+// --- LISTINGS ROUTES ---
+
+app.get('/api/listings', async (c) => {
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+    try {
+        const result = await pool.query(`
+            SELECT
+                l.id, l.title, l.price, l.unit, l.location,
+                l.category_slug as "category",
+                l.listing_type as "listingType",
+                l.description, l.image_url as "imageUrls",
+                l.created_at as "createdAt",
+                l.user_id as "sellerId",
+                u.name as "sellerName", u.phone as "sellerPhone",
+                l.is_verified as "isVerified"
+            FROM listings l
+            LEFT JOIN users u ON l.user_id = u.id
+            ORDER BY l.created_at DESC
+        `);
+
+        const listings = result.rows.map(item => ({
+            ...item,
+            price: parseFloat(item.price), // Ensure price is a number
+            imageUrls: item.imageUrls ? item.imageUrls.split(',') : [],
+            isVerified: !!item.isVerified
+        }));
+
+        return c.json(listings);
+    } catch (error: any) {
+        console.error("Listing fetch error:", error.message);
+        return c.json({ message: "Failed to fetch listings", error: error.message }, 500);
+    }
+});
+
+app.post('/api/listings', async (c) => {
+    const user = c.get('user');
+    const body = await c.req.json();
+    const { title, price, unit, location, category, listingType, description, imageUrls } = body;
+
+    if (!title || price === undefined || !unit || !location || !category || !listingType || !description || !imageUrls) {
+        return c.json({ message: "All fields are required to create a listing." }, 400);
+    }
+
+    const imageUrlsString = imageUrls.join(',');
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+
+    try {
+        const result = await pool.query(
+            'INSERT INTO listings (title, price, unit, location, category_slug, listing_type, description, image_url, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
+            [title, price, unit, location, category, listingType, description, imageUrlsString, user.id]
+        );
+        return c.json({ message: 'Listing created successfully!', listingId: result.rows[0].id }, 201);
+    } catch (error: any) {
+        console.error("CRITICAL: Error creating listing:", error);
+        return c.json({ message: 'A server error occurred while creating the listing.', error: error.message }, 500);
+    }
+});
+
+
+// --- CHAT ROUTES ---
+
+app.post('/api/conversations', async (c) => {
+    const user = c.get('user');
+    const { listingId } = await c.req.json();
+    const buyerId = user.id;
+
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+
+    try {
+        const listingResult = await pool.query('SELECT user_id FROM listings WHERE id = $1', [listingId]);
+        const listing = listingResult.rows[0];
+        if (!listing) return c.json({ message: 'Listing not found' }, 404);
+        
+        const sellerId = listing.user_id;
+        if (buyerId === sellerId) return c.json({ message: "You cannot start a conversation with yourself." }, 400);
+
+        let conversationResult = await pool.query('SELECT * FROM conversations WHERE listing_id = $1 AND buyer_id = $2', [listingId, buyerId]);
+        let conversation = conversationResult.rows[0];
+
+        if (!conversation) {
+            const result = await pool.query('INSERT INTO conversations (listing_id, buyer_id, seller_id) VALUES ($1, $2, $3) RETURNING *', [listingId, buyerId, sellerId]);
+            conversation = result.rows[0];
+        }
+
+        return c.json(conversation);
+    } catch (error: any) {
+        return c.json({ message: 'Failed to create or get conversation', error: error.message }, 500);
+    }
+});
+
+app.get('/api/conversations', async (c) => {
+    const user = c.get('user');
+    const userId = user.id;
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+
+    try {
+        const conversationsResult = await pool.query(`
+            SELECT 
+                c.id as "conversationId",
+                l.id as "listingId", l.title as "listingTitle", l.image_url as "listingImage",
+                (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY timestamp DESC LIMIT 1) as "lastMessage",
+                (SELECT timestamp FROM messages WHERE conversation_id = c.id ORDER BY timestamp DESC LIMIT 1) as "lastMessageDate",
+                CASE WHEN c.buyer_id = $1 THEN seller.name ELSE buyer.name END as "otherUserName",
+                CASE WHEN c.buyer_id = $1 THEN seller.id ELSE buyer.id END as "otherUserId"
+            FROM conversations c
+            JOIN listings l ON c.listing_id = l.id
+            JOIN users buyer ON c.buyer_id = buyer.id
+            JOIN users seller ON c.seller_id = seller.id
+            WHERE c.buyer_id = $1 OR c.seller_id = $1
+            ORDER BY "lastMessageDate" DESC
+        `, [userId]);
+
+        const conversations = conversationsResult.rows.map(c => ({
+            ...c,
+            listingImage: c.listingImage ? c.listingImage.split(',')[0] : null,
+        }));
+
+        return c.json(conversations);
+    } catch (error: any) {
+        return c.json({ message: 'Failed to fetch conversations', error: error.message }, 500);
+    }
+});
+
+app.get('/api/conversations/:id/messages', async (c) => {
+    const conversationId = c.req.param('id');
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+
+    try {
+        const messages = await pool.query('SELECT * FROM messages WHERE conversation_id = $1 ORDER BY timestamp ASC', [conversationId]);
+        return c.json(messages.rows);
+    } catch (error: any) {
+        return c.json({ message: 'Failed to fetch messages', error: error.message }, 500);
+    }
+});
+
+app.post('/api/messages', async (c) => {
+    const user = c.get('user');
+    const senderId = user.id;
+    const { conversationId, receiverId, content } = await c.req.json();
+
+    if (!conversationId || !receiverId || !content) {
+        return c.json({ message: "Missing required fields" }, 400);
+    }
+
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+
+    try {
+        const result = await pool.query(
+            'INSERT INTO messages (conversation_id, sender_id, receiver_id, content) VALUES ($1, $2, $3, $4) RETURNING id',
+            [conversationId, senderId, receiverId, content]
+        );
+        return c.json({ message: 'Message sent', messageId: result.rows[0].id }, 201);
+    } catch (error: any) {
+        return c.json({ message: 'Failed to send message', error: error.message }, 500);
+    }
+});
+
 
 export default app;
