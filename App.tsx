@@ -20,6 +20,7 @@ export default function App() {
 
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [headerFilter, setHeaderFilter] = useState('all');
+  const [mainFilter, setMainFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewState, setViewState] = useState<ViewState>('home');
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
@@ -109,10 +110,14 @@ export default function App() {
       if (headerFilter !== 'all') {
         matchesHeaderFilter = item.category === headerFilter || item.listingType === headerFilter;
       }
+      let matchesMainFilter = true;
+      if (mainFilter !== 'all') {
+        matchesMainFilter = item.listingType === mainFilter;
+      }
       const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
-      return matchesCategoryPill && matchesSearch && matchesHeaderFilter;
+      return matchesCategoryPill && matchesSearch && matchesHeaderFilter && matchesMainFilter;
     });
-  }, [listings, selectedCategory, searchQuery, headerFilter]);
+  }, [listings, selectedCategory, searchQuery, headerFilter, mainFilter]);
 
   const handleSaveListing = async (data: any, photos: File[]) => {
     setIsListingsLoading(true);
@@ -335,6 +340,21 @@ export default function App() {
 
   const HomeContent = () => (
     <main className="max-w-4xl mx-auto px-2 py-4 pb-24">
+      {/* Filter Tabs */}
+      <div className="mb-4">
+        <div className="flex space-x-2 overflow-x-auto no-scrollbar pb-2">
+          {['all', 'products', 'services'].map(filter => (
+            <button
+              key={filter}
+              onClick={() => setMainFilter(filter)}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${mainFilter === filter ? 'bg-tumbi-500 text-white' : 'bg-gray-200 dark:bg-dark-card text-gray-700 dark:text-dark-subtext'}`}
+            >
+              {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Recommended Section */}
       <div className="mb-4">
         <h2 className="text-lg font-bold text-gray-800 dark:text-dark-text px-2 mb-2">Recommended for you</h2>

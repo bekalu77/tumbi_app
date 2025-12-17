@@ -231,7 +231,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
         <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-tumbi-500 text-white">
           <h2 className="text-lg font-bold">{initialData ? 'Edit Ad' : 'Post Ad'}</h2>
           <button onClick={onClose} disabled={isSubmitting} className="p-1 hover:bg-white/20 rounded-full">
-            <ArrowLeftIcon className="w-6 h-6" />
+            <span className="text-white text-sm">← Close</span>
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
@@ -261,6 +261,15 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
                 </select>
              </div>
             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Location" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+            <div className="grid grid-cols-2 gap-4">
+                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.listingType} onChange={e => setFormData({...formData, listingType: e.target.value as 'product' | 'service', category: ''})}>
+                    <option value="product">Product</option>
+                    <option value="service">Service</option>
+                </select>
+                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                    {currentCategories.map(cat => (<option key={cat.value} value={cat.value}>{cat.name}</option>))}
+                </select>
+            </div>
             <textarea required rows={4} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
 
             <div className="pt-2">
@@ -424,7 +433,7 @@ export const ChatConversationView = ({ session, user, onBack }: { session: ChatS
         <div className="fixed inset-0 z-50 bg-white dark:bg-dark-bg flex flex-col">
             <div className="p-4 border-b dark:border-dark-border flex items-center bg-white dark:bg-dark-card shadow-sm">
                  <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full">
-                    <ArrowLeftIcon className="w-6 h-6 dark:text-dark-text" />
+                    <span className="text-gray-900 dark:text-dark-text text-sm">← Back</span>
                 </button>
                 <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-gray-200 dark:bg-dark-bg rounded-full flex items-center justify-center overflow-hidden">
@@ -469,7 +478,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
             <div className="sticky top-0 bg-white dark:bg-dark-card z-10 flex items-center p-4 border-b dark:border-dark-border justify-between">
                 <div className="flex items-center flex-1 truncate">
                     <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full">
-                        <ArrowLeftIcon className="w-6 h-6 dark:text-dark-text" />
+                        <span className="text-gray-900 dark:text-dark-text text-sm">← Back</span>
                     </button>
                     <h2 className="font-bold text-lg truncate dark:text-dark-text">{listing.title}</h2>
                 </div>
