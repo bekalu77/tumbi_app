@@ -30,7 +30,7 @@ export default function App() {
 
   const fetchListings = async () => {
     try {
-      const response = await fetch(`${API_URL}/listings`);
+      const response = await fetch(`${API_URL}/api/listings`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setListings(data);
@@ -128,7 +128,7 @@ export default function App() {
         photoFormData.append('photos', photo);
       });
 
-      const uploadRes = await fetch(`${API_URL}/upload`, {
+      const uploadRes = await fetch(`${API_URL}/api/upload`, {
         method: 'POST',
         headers: { 'x-access-token': token },
         body: photoFormData,
@@ -141,7 +141,7 @@ export default function App() {
 
       const listingData = { ...data, imageUrls: uploadData.urls };
 
-      const listingRes = await fetch(`${API_URL}/listings`, {
+      const listingRes = await fetch(`${API_URL}/api/listings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -193,7 +193,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`${API_URL}/conversations`, {
+      const res = await fetch(`${API_URL}/api/conversations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

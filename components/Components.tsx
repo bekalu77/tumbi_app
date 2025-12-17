@@ -257,7 +257,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
              <div className="grid grid-cols-2 gap-4">
                 <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Price" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
                 <select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>
-                    {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}\
+                    {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}
                 </select>
              </div>
             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Location" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
@@ -306,7 +306,7 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
             const token = localStorage.getItem('token');
             if (!token) { setLoading(false); return; }
             try {
-                const res = await fetch(`${API_URL}/conversations`, { headers: { 'x-access-token': token } });
+                const res = await fetch(`${API_URL}/api/conversations`, { headers: { 'x-access-token': token } });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message);
                 setSessions(data);
@@ -378,7 +378,7 @@ export const ChatConversationView = ({ session, user, onBack }: { session: ChatS
         const token = localStorage.getItem('token');
         if (!user || !token) return;
         try {
-            const res = await fetch(`${API_URL}/conversations/${session.conversationId}/messages`, { headers: { 'x-access-token': token } });
+            const res = await fetch(`${API_URL}/api/conversations/${session.conversationId}/messages`, { headers: { 'x-access-token': token } });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message);
             setMessages(data);
@@ -403,7 +403,7 @@ export const ChatConversationView = ({ session, user, onBack }: { session: ChatS
         const token = localStorage.getItem('token');
         if (!newMessage.trim() || !user || !token) return;
         try {
-             await fetch(`${API_URL}/messages`, {
+             await fetch(`${API_URL}/api/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-access-token': token },
                 body: JSON.stringify({ conversationId: session.conversationId, receiverId: session.otherUserId, content: newMessage })
@@ -479,7 +479,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                         <button onClick={goToPrev} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60"><ChevronLeftIcon className="w-6 h-6" /></button>
                         <button onClick={goToNext} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60"><ChevronRightIcon className="w-6 h-6" /></button>
                         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-2">
-                            {imageUrls.map((_, index) => (<div key={index} className={`w-2 h-2 rounded-full ${currentImageIndex === index ? 'bg-white' : 'bg-white/50'}`}></div>))}\
+                            {imageUrls.map((_, index) => (<div key={index} className={`w-2 h-2 rounded-full ${currentImageIndex === index ? 'bg-white' : 'bg-white/50'}`}></div>))}
                         </div>
                     </>
                 )}
