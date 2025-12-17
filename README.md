@@ -25,14 +25,20 @@ First, deploy your backend API to Cloudflare Workers.
     cd backend
     ```
 
-2.  **Deploy:**
+2.  **Install Dependencies:**
+
+    ```bash
+    npm install
+    ```
+
+3.  **Deploy:**
 
     ```bash
     npm run deploy
     ```
     *This will build and deploy your worker. After the first deploy, you must configure your secrets in the Cloudflare dashboard.*
 
-3.  **Configure Secrets in Cloudflare:**
+4.  **Configure Secrets in Cloudflare:**
     *   Go to **Workers & Pages** > `tumbi-backend` > **Settings** > **Variables**.
     *   Add your `DATABASE_URL` and `JWT_SECRET`.
     *   Under **R2 Bucket Bindings**, ensure your `R2_BUCKET` is bound to the `tumbiapp` bucket.
@@ -59,5 +65,5 @@ Your site will now be live and fully functional.
 
 ## Local Development
 
-- **Backend:** `cd backend` and run `npm run dev`.
-- **Frontend:** From the root directory, run `npm run dev`.
+- **Backend:** `cd backend`, run `npm install`, and then `npm run dev`.
+- **Frontend:** From the root directory, run `npm install`, and then `npm run dev`.
