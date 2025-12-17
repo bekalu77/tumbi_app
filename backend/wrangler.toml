@@ -3,14 +3,7 @@ name = "tumbi-backend"
 main = "src/worker.ts"
 compatibility_date = "2024-04-05"
 
-# These bindings are how you connect your secrets (environment variables) and R2 bucket.
-# You will set the actual values for these in the Cloudflare dashboard under
-# Workers & Pages > your_worker > Settings > Variables
-
-[vars]
-DATABASE_URL = "your_neon_database_url_here"
-JWT_SECRET = "your_super_secret_jwt_key_here"
-
+# Bind your R2 bucket. Secrets are managed separately.
 [[r2_buckets]]
 binding = "R2_BUCKET"
 bucket_name = "tumbiapp"

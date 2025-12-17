@@ -13,11 +13,11 @@ This project has been updated to a modern, serverless architecture:
 
 ## Deployment
 
-This project is now configured for a clean, two-step deployment process.
+Your project is now configured for a streamlined, two-step deployment.
 
 ### 1. Backend Deployment (Cloudflare)
 
-First, deploy your backend API to Cloudflare Workers.
+Your backend deployment is now automated. Your secrets are stored in the `backend/wrangler.toml` file, which is ignored by Git.
 
 1.  **Navigate to the backend directory:**
 
@@ -25,7 +25,7 @@ First, deploy your backend API to Cloudflare Workers.
     cd backend
     ```
 
-2.  **Install Dependencies:**
+2.  **Install Dependencies (if you haven't already):**
 
     ```bash
     npm install
@@ -36,34 +36,27 @@ First, deploy your backend API to Cloudflare Workers.
     ```bash
     npm run deploy
     ```
-    *This will build and deploy your worker. After the first deploy, you must configure your secrets in the Cloudflare dashboard.*
-
-4.  **Configure Secrets in Cloudflare:**
-    *   Go to **Workers & Pages** > `tumbi-backend` > **Settings** > **Variables**.
-    *   Add your `DATABASE_URL` and `JWT_SECRET`.
-    *   Under **R2 Bucket Bindings**, ensure your `R2_BUCKET` is bound to the `tumbiapp` bucket.
+    *This single command will now build, upload, and set the secrets for your worker.*
 
 ### 2. Frontend Deployment (Vercel)
 
-Once the backend is live, deploy your frontend to Vercel.
+Once the backend is live, deploy your frontend.
 
 1.  **Push to GitHub:** Ensure all your latest code is pushed to your GitHub repository.
 
 2.  **Configure Vercel:**
     *   Connect your GitHub repository to a new Vercel project.
-    *   Vercel will automatically detect your Vite project and configure the build settings. **You do not need to change anything.**
+    *   Vercel will automatically detect your Vite project.
 
 3.  **Add Environment Variable:**
     *   In your Vercel project settings, go to **Settings > Environment Variables**.
-    *   Add the following variable:
-        *   **Name:** `VITE_API_URL`
-        *   **Value:** The URL of your live Cloudflare Worker (e.g., `https://tumbi-backend.<your-name>.workers.dev`).
+    *   Add: `VITE_API_URL` = The URL of your live Cloudflare Worker (e.g., `https://tumbi-backend.bekalu77.workers.dev`).
 
-4.  **Trigger a Redeploy:** Vercel will automatically build and deploy the latest version from your `main` branch.
+4.  **Deploy.**
 
 Your site will now be live and fully functional.
 
 ## Local Development
 
-- **Backend:** `cd backend`, run `npm install`, and then `npm run dev`.
-- **Frontend:** From the root directory, run `npm install`, and then `npm run dev`.
+- **Backend:** `cd backend`, run `npm install`, then `npm run dev`.
+- **Frontend:** From the root directory, run `npm install`, then `npm run dev`.

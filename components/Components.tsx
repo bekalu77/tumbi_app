@@ -22,7 +22,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
         const body = isRegister ? formData : { email: formData.email, password: formData.password };
 
         try {
-            const response = await fetch(`${API_URL}${endpoint}`,
+            const response = await fetch(`${API_URL}/api${endpoint}`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -257,7 +257,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
              <div className="grid grid-cols-2 gap-4">
                 <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Price" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
                 <select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>
-                    {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}
+                    {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}\
                 </select>
              </div>
             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Location" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
@@ -479,7 +479,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                         <button onClick={goToPrev} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60"><ChevronLeftIcon className="w-6 h-6" /></button>
                         <button onClick={goToNext} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60"><ChevronRightIcon className="w-6 h-6" /></button>
                         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-2">
-                            {imageUrls.map((_, index) => (<div key={index} className={`w-2 h-2 rounded-full ${currentImageIndex === index ? 'bg-white' : 'bg-white/50'}`}></div>))}
+                            {imageUrls.map((_, index) => (<div key={index} className={`w-2 h-2 rounded-full ${currentImageIndex === index ? 'bg-white' : 'bg-white/50'}`}></div>))}\
                         </div>
                     </>
                 )}
