@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
-import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, HeartIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons';
+import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, HeartIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon } from './Icons';
 import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, MEASUREMENT_UNITS } from '../constants';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -352,7 +352,7 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
     );
 };
 
-export const ProfileView = ({ user, listings, onLogout, onOpenListing }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void }) => (
+export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean }) => (
     <div className="max-w-4xl mx-auto p-4 pb-24">
         <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-dark-border p-6 mb-4 flex items-center space-x-4">
             <div className="w-20 h-20 bg-tumbi-100 dark:bg-tumbi-900/50 rounded-full flex items-center justify-center">
@@ -363,9 +363,14 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing }: { user:
                 <p className="text-gray-500 dark:text-dark-subtext text-sm">{user.location}</p>
             </div>
         </div>
-        <button onClick={onLogout} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600 flex justify-between items-center group">
-            <div className="flex items-center"><LogOutIcon className="w-5 h-5 mr-3" /> Log Out</div>
-        </button>
+        <div className="space-y-2">
+            <button onClick={toggleDarkMode} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text flex justify-between items-center group">
+                <div className="flex items-center">{isDarkMode ? <SunIcon className="w-5 h-5 mr-3" /> : <MoonIcon className="w-5 h-5 mr-3" />}Toggle Theme</div>
+            </button>
+            <button onClick={onLogout} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600 flex justify-between items-center group">
+                <div className="flex items-center"><LogOutIcon className="w-5 h-5 mr-3" /> Log Out</div>
+            </button>
+        </div>
     </div>
 );
 

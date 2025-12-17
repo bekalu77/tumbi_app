@@ -417,7 +417,7 @@ export default function App() {
             />
         )}
         {viewState === 'profile' && user ? (
-            <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} />
+            <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} />
         ) : viewState === 'profile' && !user ? (
              <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} />
         ) : null}

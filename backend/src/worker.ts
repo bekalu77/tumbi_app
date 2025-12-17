@@ -139,6 +139,8 @@ app.post('/api/upload', async (c) => {
     }
 
     const filePaths: string[] = [];
+    const url = new URL(c.req.url);
+    const baseUrl = `${url.protocol}//${url.host}`;
 
     for (const photo of photos) {
         if (photo instanceof File) {
@@ -147,8 +149,7 @@ app.post('/api/upload', async (c) => {
                 await c.env.R2_BUCKET.put(uniqueName, await photo.arrayBuffer(), {
                     httpMetadata: { contentType: photo.type },
                 });
-                // Construct the public URL
-                const publicUrl = c.req.url.replace(/\/upload$/, '') + `/uploads/${uniqueName}`;
+                const publicUrl = `${baseUrl}/api/uploads/${uniqueName}`;
                 filePaths.push(publicUrl);
             } catch (err: any) {
                 console.error('R2 Upload Error:', err.message);
@@ -161,7 +162,7 @@ app.post('/api/upload', async (c) => {
 });
 
 // Serve uploaded files from R2
-app.get('/uploads/:key', async (c) => {
+app.get('/api/uploads/:key', async (c) => {
     const key = c.req.param('key');
     const object = await c.env.R2_BUCKET.get(key);
 

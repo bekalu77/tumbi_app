@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "wrangler dev",
     "deploy": "wrangler deploy",
-    "dev": "npm run db:setup && wrangler dev",
+    "dev": "wrangler dev",
     "db:setup": "node --loader ts-node/esm database/setup.ts"
   },
   "dependencies": {
