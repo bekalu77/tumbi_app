@@ -367,7 +367,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
             <button onClick={toggleDarkMode} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text flex justify-between items-center group">
                 <div className="flex items-center">{isDarkMode ? <SunIcon className="w-5 h-5 mr-3" /> : <MoonIcon className="w-5 h-5 mr-3" />}Toggle Theme</div>
             </button>
-            <button onClick={onLogout} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600 flex justify-between items-center group">
+            <button onClick={onLogout} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border--dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600 flex justify-between items-center group">
                 <div className="flex items-center"><LogOutIcon className="w-5 h-5 mr-3" /> Log Out</div>
             </button>
         </div>
