@@ -19,10 +19,16 @@ app.use('/*', cors()); // Enable CORS for all routes
 
 // Auth middleware to protect routes
 app.use('/api/*', async (c, next) => {
-    if (c.req.path === '/api/register' || c.req.path === '/api/login' || c.req.path === '/api/listings') {
+    // Allow public access for registration, login, and viewing listings
+    if (
+        c.req.path === '/api/register' ||
+        c.req.path === '/api/login' ||
+        (c.req.path === '/api/listings' && c.req.method === 'GET')
+    ) {
         return next();
     }
 
+    // For all other routes, require a valid token
     const authHeader = c.req.header('x-access-token');
     if (!authHeader) {
         return c.json({ auth: false, message: 'No token provided.' }, 401);
@@ -31,7 +37,7 @@ app.use('/api/*', async (c, next) => {
     try {
         const decoded = await verify(authHeader, c.env.JWT_SECRET);
         if (!decoded || !decoded.id) {
-             throw new Error("Invalid token payload");
+            throw new Error("Invalid token payload");
         }
 
         const pool = new Pool({ connectionString: c.env.DATABASE_URL });
