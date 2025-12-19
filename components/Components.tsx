@@ -6,6 +6,50 @@ import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CI
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
 
+// Image optimization function
+const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<File> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const resizedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(resizedFile);
+          }
+        }, 'image/jpeg', quality);
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 // --- Auth Modal ---
 export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onAuthSuccess: (data: { auth: boolean, token: string, user: User }) => void }) => {
     const [isRegister, setIsRegister] = useState(false);
@@ -208,7 +252,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
     };
   }, [initialData]);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
         const filesArray = Array.from(e.target.files);
         const remainingSlots = 5 - photos.length;
@@ -218,8 +262,13 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
             alert(`You can only upload a maximum of 5 photos.`);
         }
 
-        setPhotos(prev => [...prev, ...filesToAdd]);
-        const newPreviews = filesToAdd.map(file => URL.createObjectURL(file));
+        // Optimize images before adding to state
+        const optimizedFiles = await Promise.all(
+            filesToAdd.map(file => resizeImage(file, 800, 800, 0.8))
+        );
+
+        setPhotos(prev => [...prev, ...optimizedFiles]);
+        const newPreviews = optimizedFiles.map(file => URL.createObjectURL(file));
         setPhotoPreviews(prev => [...prev, ...newPreviews]);
     }
   };
