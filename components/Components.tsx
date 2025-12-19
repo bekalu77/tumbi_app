@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
 import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, HeartIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon } from './Icons';
 import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
@@ -139,7 +139,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
 };
 
 
-// --- Listing Card (Redesigned) ---
+// --- Listing Card Optimized with memo ---
 interface ListingCardProps {
   listing: Listing;
   onClick: () => void;
@@ -150,7 +150,7 @@ interface ListingCardProps {
   showActions?: boolean;
 }
 
-export const ListingCard: React.FC<ListingCardProps> = ({ listing, onClick, isSaved = false, onToggleSave, onEdit, onDelete, showActions = false }) => {
+export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSave, onEdit, onDelete, showActions = false }: ListingCardProps) => {
     const firstImage = Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0 
         ? listing.imageUrls[0]
         : 'https://picsum.photos/400/300?random=42';
@@ -159,7 +159,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing, onClick, isSa
     <div onClick={onClick} className="mb-3 break-inside-avoid cursor-pointer relative group">
       <div className="bg-white dark:bg-dark-card rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
         <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-dark-border relative">
-            <img src={firstImage} alt={listing.title} className="w-full h-full object-cover" />
+            <img src={firstImage} alt={listing.title} className="w-full h-full object-cover" loading="lazy" />
             {onToggleSave && !showActions && (
                 <button 
                     onClick={onToggleSave}
@@ -193,7 +193,8 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing, onClick, isSa
       </div>
     </div>
   );
-};
+});
+
 
 // --- Recommended Card ---
 export const RecommendedCard: React.FC<{category: any, onClick: () => void}> = ({ category, onClick }) => (
@@ -394,6 +395,7 @@ export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listin
 export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (session: ChatSession) => void }) => {
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [loading, setLoading] = useState(true);
+    const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
 
     useEffect(() => {
         const loadConversations = async () => {
@@ -416,30 +418,48 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
     if (loading) return <div className="p-10 text-center text-gray-400 dark:text-dark-subtext">Loading messages...</div>;
 
     return (
-        <div className="max-w-4xl mx-auto p-4 pb-24">
-            <h2 className="text-2xl font-bold mb-4 dark:text-dark-text">Messages</h2>
-            <div className="space-y-4">
-                {sessions.length === 0 ? (
-                    <div className="text-center py-20 text-gray-500 dark:text-dark-subtext">
-                        <MessageCircleIcon className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                        <p>No messages yet. Start a conversation to see it here.</p>
-                    </div>
-                ) : (
-                    sessions.map(session => (
-                        <div key={session.conversationId} onClick={() => onOpenChat(session)} className="bg-white dark:bg-dark-card p-4 rounded-lg shadow-sm border border-gray-100 dark:border-dark-border flex items-center space-x-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-border">
-                            <div className="w-12 h-12 bg-gray-100 dark:bg-dark-bg rounded-lg flex-shrink-0 overflow-hidden">
-                                {session.listingImage && <img src={session.listingImage} className="w-full h-full object-cover" alt="" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-baseline mb-1">
-                                    <h3 className="font-bold text-gray-900 dark:text-dark-text truncate pr-2">{session.otherUserName}</h3>
-                                    <span className="text-xs text-gray-400 dark:text-dark-subtext whitespace-nowrap">{session.lastMessageDate ? new Date(session.lastMessageDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+        <div className="max-w-6xl mx-auto h-[calc(100vh-140px)] bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-dark-border overflow-hidden flex flex-col md:flex-row my-4 mx-4">
+            {/* Left Panel: Conversation List */}
+            <div className={`w-full md:w-80 border-r border-gray-100 dark:border-dark-border flex-shrink-0 flex flex-col ${selectedSession ? 'hidden md:flex' : 'flex'}`}>
+                <div className="p-4 border-b border-gray-100 dark:border-dark-border bg-gray-50 dark:bg-dark-bg">
+                    <h2 className="text-lg font-bold dark:text-dark-text">Chats</h2>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                    {sessions.length === 0 ? (
+                        <div className="text-center py-10 px-4 text-gray-500">No chats found.</div>
+                    ) : (
+                        sessions.map(session => (
+                            <div 
+                                key={session.conversationId} 
+                                onClick={() => { if(window.innerWidth < 768) onOpenChat(session); else setSelectedSession(session); }} 
+                                className={`p-4 border-b border-gray-50 dark:border-dark-border flex items-center space-x-3 cursor-pointer transition-colors ${selectedSession?.conversationId === session.conversationId ? 'bg-tumbi-50 dark:bg-tumbi-900/20' : 'hover:bg-gray-50 dark:hover:bg-dark-bg'}`}
+                            >
+                                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                                    {session.listingImage && <img src={session.listingImage} className="w-full h-full object-cover" alt="" />}
                                 </div>
-                                <p className="text-xs text-tumbi-600 dark:text-tumbi-400 font-medium mb-1 truncate">{session.listingTitle}</p>
-                                <p className="text-sm text-gray-600 dark:text-dark-subtext truncate">{session.lastMessage || 'No messages yet'}</p>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-baseline">
+                                        <h3 className="font-bold text-sm dark:text-dark-text truncate pr-2">{session.otherUserName}</h3>
+                                        <span className="text-[10px] text-gray-400 whitespace-nowrap">{session.lastMessageDate ? new Date(session.lastMessageDate).toLocaleDateString() : ''}</span>
+                                    </div>
+                                    <p className="text-xs text-tumbi-600 dark:text-tumbi-400 font-medium truncate">{session.listingTitle}</p>
+                                    <p className="text-xs text-gray-500 truncate mt-0.5">{session.lastMessage || 'No messages yet'}</p>
+                                </div>
                             </div>
-                        </div>
-                    ))
+                        )
+                    ))}
+                </div>
+            </div>
+
+            {/* Right Panel: Active Chat (Gmail-like layout) */}
+            <div className={`flex-1 flex flex-col ${!selectedSession ? 'hidden md:flex items-center justify-center bg-gray-50 dark:bg-dark-bg' : 'flex bg-white dark:bg-dark-card'}`}>
+                {selectedSession ? (
+                    <ChatConversationView session={selectedSession} user={user} onBack={() => setSelectedSession(null)} embedded={true} />
+                ) : (
+                    <div className="text-center">
+                        <MessageCircleIcon className="w-16 h-16 text-gray-200 dark:text-dark-border mx-auto mb-4" />
+                        <p className="text-gray-400 font-medium">Select a conversation to start chatting</p>
+                    </div>
                 )}
             </div>
         </div>
@@ -520,7 +540,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
     );
 };
 
-export const ChatConversationView = ({ session, user, onBack }: { session: ChatSession; user: User; onBack: () => void }) => {
+export const ChatConversationView = ({ session, user, onBack, embedded = false }: { session: ChatSession; user: User; onBack: () => void; embedded?: boolean }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -567,9 +587,9 @@ export const ChatConversationView = ({ session, user, onBack }: { session: ChatS
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-dark-bg flex flex-col">
+        <div className={`flex flex-col h-full ${!embedded ? 'fixed inset-0 z-50 bg-white dark:bg-dark-bg' : ''}`}>
             <div className="p-4 border-b dark:border-dark-border flex items-center bg-white dark:bg-dark-card shadow-sm">
-                 <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full">
+                 <button onClick={onBack} className={`p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full ${embedded ? 'md:hidden' : ''}`}>
                     <ChevronLeftIcon className="w-5 h-5 text-gray-900 dark:text-dark-text" />
                 </button>
                 <div className="flex items-center space-x-3">
@@ -623,6 +643,19 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                      <HeartIcon className="w-6 h-6" filled={isSaved} />
                 </button>
             </div>
+            
+            {/* Call/Chat Buttons placed prominently at the top if not owner */}
+            {!isOwner && (
+                <div className="p-4 bg-gray-50 dark:bg-dark-bg flex space-x-3 border-b dark:border-dark-border">
+                    <a href={`tel:${listing.sellerPhone || ''}`} className="flex-1 bg-white dark:bg-dark-card border-2 border-tumbi-500 text-tumbi-600 hover:bg-tumbi-50 font-bold py-3 rounded-xl flex items-center justify-center transition-colors">
+                        <PhoneIcon className="w-5 h-5 mr-2" /> Call
+                    </a>
+                    <button onClick={() => onChat(listing)} className="flex-1 bg-tumbi-600 hover:bg-tumbi-700 text-white font-bold py-3 rounded-xl flex items-center justify-center transition-transform active:scale-95 shadow-lg shadow-tumbi-200 dark:shadow-none">
+                        <MessageCircleIcon className="w-5 h-5 mr-2" /> Chat
+                    </button>
+                </div>
+            )}
+
             <div className="w-full aspect-video bg-black relative">
                 {imageUrls.length > 0 && imageUrls[0] && <img src={imageUrls[currentImageIndex]} alt={listing.title} className="w-full h-full object-contain" />}
                 {imageUrls.length > 1 && (
@@ -648,19 +681,16 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                 </div>
                 <div>
                     <h3 className="font-bold text-lg mb-2 dark:text-dark-text">Description</h3>
-                    <p className="text-gray-700 dark:text-dark-subtext leading-relaxed whitespace-pre-line">{listing.description}</p>
+                    <p className="text-gray-700 dark:text-dark-subtext leading-relaxed whitespace-pre-line pb-20">{listing.description}</p>
                 </div>
             </div>
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-dark-card border-t dark:border-dark-border flex space-x-3 items-center justify-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-                {isOwner ? (
-                     <button onClick={() => onEdit(listing)} className="flex-1 max-w-sm bg-gray-900 dark:bg-tumbi-700 hover:bg-gray-800 text-white font-bold py-3 rounded-lg flex items-center justify-center"><SettingsIcon className="w-5 h-5 mr-2" />Edit Listing</button>
-                ) : (
-                    <>
-                        <a href={`tel:${listing.sellerPhone || ''}`} className="flex-1 max-w-[180px] bg-white dark:bg-dark-card border-2 border-tumbi-500 text-tumbi-600 hover:bg-tumbi-50 dark:hover:bg-dark-border font-bold py-3 rounded-lg flex items-center justify-center"><PhoneIcon className="w-5 h-5 mr-2" />Call</a>
-                        <button onClick={() => onChat(listing)} className="flex-1 max-w-[180px] bg-tumbi-600 hover:bg-tumbi-700 text-white font-bold py-3 rounded-lg flex items-center justify-center"><MessageCircleIcon className="w-5 h-5 mr-2" />Chat</button>
-                    </>
-                )}
-            </div>
+            
+            {/* Owner Actions at bottom */}
+            {isOwner && (
+                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-dark-card border-t dark:border-dark-border flex items-center justify-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                     <button onClick={() => onEdit(listing)} className="w-full max-w-md bg-gray-900 dark:bg-tumbi-700 hover:bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center"><SettingsIcon className="w-5 h-5 mr-2" />Edit Listing</button>
+                </div>
+            )}
         </div>
     );
 }

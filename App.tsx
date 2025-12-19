@@ -6,6 +6,7 @@ import { ListingCard, CategoryPill, AddListingForm, DetailView, SavedView, Messa
 import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon, MapPinIcon } from './components/Icons';
 import ThemeToggle from './components/ThemeToggle';
 
+// Use a stable API URL fallback
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
 
 export default function App() {
@@ -42,13 +43,20 @@ export default function App() {
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
 
   const fetchListings = async () => {
+    console.log("App: Attempting to fetch from", `${API_URL}/api/listings`);
     try {
       const response = await fetch(`${API_URL}/api/listings`);
+      console.log("App: Fetch response status:", response.status);
+      
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
       const data = await response.json();
+      console.log("App: Received listings count:", data.length);
+      console.log("App: Raw data samples:", data.slice(0, 2));
+      
       setListings(data);
     } catch (e) {
-      console.error("Failed to load listings", e);
+      console.error("App: Failed to load listings:", e);
     } finally {
       setIsListingsLoading(false);
     }
