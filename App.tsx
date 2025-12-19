@@ -1,9 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { CATEGORIES, PRODUCT_CATEGORIES, SERVICE_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
+import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
-import { ListingCard, CategoryPill, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView } from './components/Components';
-import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon, MapPinIcon } from './components/Icons';
+import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView } from './components/Components';
+import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon } from './components/Icons';
 import ThemeToggle from './components/ThemeToggle';
 
 // Use a stable API URL fallback
@@ -24,13 +24,10 @@ export default function App() {
   const [mainFilter, setMainFilter] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [selectedCity, setSelectedCity] = useState('All Cities');
-  const [minPriceInput, setMinPriceInput] = useState<string>('');
-  const [maxPriceInput, setMaxPriceInput] = useState<string>('');
   const [sortBy, setSortBy] = useState('date-desc');
   
   // Active Filter state (Applied to Memo)
   const [appliedFilters, setAppliedFilters] = useState({
-    priceRange: [0, 10000000] as [number, number],
     searchQuery: '',
   });
 
@@ -46,14 +43,8 @@ export default function App() {
     console.log("App: Attempting to fetch from", `${API_URL}/api/listings`);
     try {
       const response = await fetch(`${API_URL}/api/listings`);
-      console.log("App: Fetch response status:", response.status);
-      
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      
       const data = await response.json();
-      console.log("App: Received listings count:", data.length);
-      console.log("App: Raw data samples:", data.slice(0, 2));
-      
       setListings(data);
     } catch (e) {
       console.error("App: Failed to load listings:", e);
@@ -101,21 +92,15 @@ export default function App() {
   const resetAllFilters = () => {
     setSelectedCategory('all');
     setSelectedCity('All Cities');
-    setMinPriceInput('');
-    setMaxPriceInput('');
     setSearchInput('');
     setSortBy('date-desc');
     setMainFilter('all');
-    setAppliedFilters({ priceRange: [0, 10000000], searchQuery: '' });
+    setAppliedFilters({ searchQuery: '' });
     setViewState('home');
   };
 
   const handleApplyFilters = () => {
     setAppliedFilters({
-        priceRange: [
-            minPriceInput === '' ? 0 : Number(minPriceInput),
-            maxPriceInput === '' ? 10000000 : Number(maxPriceInput)
-        ],
         searchQuery: searchInput,
     });
   };
@@ -131,11 +116,10 @@ export default function App() {
 
       const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
       const matchesCity = selectedCity === 'All Cities' || item.location === selectedCity;
-      const matchesPrice = item.price >= appliedFilters.priceRange[0] && item.price <= appliedFilters.priceRange[1];
       const matchesSearch = item.title.toLowerCase().includes(appliedFilters.searchQuery.toLowerCase()) || 
                            (item.description && item.description.toLowerCase().includes(appliedFilters.searchQuery.toLowerCase()));
       
-      return matchesMainFilter && matchesCategory && matchesCity && matchesPrice && matchesSearch;
+      return matchesMainFilter && matchesCategory && matchesCity && matchesSearch;
     });
 
     filtered.sort((a, b) => {
@@ -233,44 +217,44 @@ export default function App() {
         {/* Header Section */}
         <header className="sticky top-0 z-30 bg-tumbi-500 dark:bg-dark-card shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-3">
+                {/* Row 1: Logo and Toggle */}
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={resetAllFilters}>
-                        <h1 className="text-xl font-bold tracking-tight">Tumbi</h1>
+                        <h1 className="text-xl font-bold tracking-tight uppercase">TUMBI marketplace</h1>
                     </div>
                     <div className="flex items-center">
                         <ThemeToggle isDark={isDarkMode} toggle={toggleDarkMode} />
                     </div>
                 </div>
-                <div className="flex space-x-2">
-                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-sm outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}>
-                        <option>All Cities</option>
-                        {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
-                    </select>
-                    <div className="relative flex-grow">
+                
+                {/* Row 2: Search */}
+                <div className="mb-3">
+                    <div className="relative w-full">
                         <input type="text" placeholder="I am looking for..." className="w-full h-10 pl-4 pr-10 rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder-gray-500 dark:placeholder-dark-subtext outline-none focus:ring-2 focus:ring-tumbi-700 shadow-sm text-sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()} />
                         <button onClick={handleApplyFilters} className="absolute right-0 top-0 h-10 px-3 text-gray-400 dark:text-dark-subtext">
                             <SearchIcon className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
+
+                {/* Row 3: Filters */}
                 {viewState === 'home' && (
-                    <div className="mt-3 flex flex-wrap gap-2 items-center text-white text-xs">
-                        <div className="flex items-center bg-tumbi-600 dark:bg-dark-border rounded-lg px-2 h-8">
-                            <span className="mr-2 opacity-70">Sort:</span>
-                            <select className="bg-transparent border-none outline-none text-white text-xs p-0 focus:ring-0 cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                                <option value="date-desc" className="text-gray-900">Newest</option>
-                                <option value="date-asc" className="text-gray-900">Oldest</option>
-                                <option value="price-asc" className="text-gray-900">Price: Low-High</option>
-                                <option value="price-desc" className="text-gray-900">Price: High-Low</option>
-                            </select>
-                        </div>
-                        <div className="flex items-center bg-tumbi-600 dark:bg-dark-border rounded-lg px-2 h-8">
-                            <span className="mr-2 opacity-70">Price:</span>
-                            <input type="number" placeholder="Min" className="bg-transparent border-none outline-none w-12 text-white placeholder-white/50 p-0 text-xs focus:ring-0" value={minPriceInput} onChange={e => setMinPriceInput(e.target.value)} />
-                            <span className="mx-1 opacity-50">-</span>
-                            <input type="number" placeholder="Max" className="bg-transparent border-none outline-none w-12 text-white placeholder-white/50 p-0 text-xs focus:ring-0" value={maxPriceInput} onChange={e => setMaxPriceInput(e.target.value)} />
-                        </div>
-                        <button onClick={handleApplyFilters} className="bg-white/20 hover:bg-white/30 text-white font-bold px-3 h-8 rounded-lg transition-colors border border-white/20">Apply</button>
+                    <div className="grid grid-cols-3 gap-2">
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}>
+                            <option>All Cities</option>
+                            {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                        </select>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={mainFilter} onChange={e => setMainFilter(e.target.value)}>
+                            <option value="all">Product or Service</option>
+                            <option value="products">Products</option>
+                            <option value="services">Services</option>
+                        </select>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
+                            <option value="all">All Categories</option>
+                            {[...PRODUCT_CATEGORIES, ...SERVICE_CATEGORIES].map(cat => (
+                                <option key={cat.value} value={cat.value}>{cat.label}</option>
+                            ))}
+                        </select>
                     </div>
                 )}
             </div>
@@ -279,38 +263,25 @@ export default function App() {
         {/* Content Section */}
         {viewState === 'home' && (
             <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row">
-                <aside className="hidden lg:block w-72 flex-shrink-0 pr-10 border-r border-gray-100 dark:border-dark-border">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-6">Filter Categories</h2>
-                    <div className="space-y-1">
-                        <button onClick={() => setSelectedCategory('all')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${selectedCategory === 'all' ? 'bg-tumbi-500 text-white shadow-md' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}>All Categories</button>
-                        <div className="pt-2 pb-1 text-[10px] font-bold text-gray-400 dark:text-dark-subtext uppercase tracking-wider px-4">Materials</div>
-                        {PRODUCT_CATEGORIES.map(cat => (
-                            <button key={cat.value} onClick={() => setSelectedCategory(prev => prev === cat.value ? 'all' : cat.value)} className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${selectedCategory === cat.value ? 'bg-tumbi-50 dark:bg-tumbi-900/20 text-tumbi-700 dark:text-tumbi-300' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}>
-                                <span>{cat.label}</span>
-                                <input type="checkbox" readOnly checked={selectedCategory === cat.value} className="w-4 h-4 rounded border-gray-300 dark:border-dark-border text-tumbi-600 focus:ring-tumbi-500 bg-white dark:bg-dark-bg cursor-pointer" />
-                            </button>
-                        ))}
-                        <div className="pt-4 pb-1 text-[10px] font-bold text-gray-400 dark:text-dark-subtext uppercase tracking-wider px-4">Services</div>
-                        {SERVICE_CATEGORIES.map(cat => (
-                            <button key={cat.value} onClick={() => setSelectedCategory(prev => prev === cat.value ? 'all' : cat.value)} className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${selectedCategory === cat.value ? 'bg-tumbi-50 dark:bg-tumbi-900/20 text-tumbi-700 dark:text-tumbi-300' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}>
-                                <span>{cat.label}</span>
-                                <input type="checkbox" readOnly checked={selectedCategory === cat.value} className="w-4 h-4 rounded border-gray-300 dark:border-dark-border text-tumbi-600 focus:ring-tumbi-500 bg-white dark:bg-dark-bg cursor-pointer" />
-                            </button>
-                        ))}
+                <main className="flex-1">
+                    <div className="mb-6 flex justify-end">
+                        <div className="flex items-center bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg px-3 h-10 shadow-sm">
+                            <span className="mr-2 text-xs font-bold text-gray-500 dark:text-dark-subtext">Sort by:</span>
+                            <select className="bg-transparent border-none outline-none text-gray-900 dark:text-dark-text text-xs font-bold p-0 focus:ring-0 cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                                <option value="date-desc">Newest</option>
+                                <option value="date-asc">Oldest</option>
+                                <option value="price-asc">Price: Low-High</option>
+                                <option value="price-desc">Price: High-Low</option>
+                            </select>
+                        </div>
                     </div>
-                </aside>
-                <main className="flex-1 lg:pl-10">
-                    <div className="mb-8 flex space-x-2 overflow-x-auto no-scrollbar pb-2">
-                        {['all', 'products', 'services'].map(filter => (
-                            <button key={filter} onClick={() => setMainFilter(filter)} className={`flex-1 min-w-[80px] max-w-[120px] py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-200 ${mainFilter === filter ? 'bg-tumbi-500 text-white shadow-lg' : 'bg-white dark:bg-dark-card text-gray-600 dark:text-dark-subtext border border-gray-200 dark:border-dark-border'}`}>{filter === 'all' ? 'All Ads' : filter.charAt(0).toUpperCase() + filter.slice(1)}</button>
-                        ))}
-                    </div>
+
                     {isListingsLoading ? (
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                            {[1,2,3,4,5,6].map(i => <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-2xl aspect-square animate-pulse"></div>)}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-2xl aspect-square animate-pulse"></div>)}
                         </div>
                     ) : filteredListings.length > 0 ? (
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {filteredListings.map(item => (
                             <ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} />
                         ))}
