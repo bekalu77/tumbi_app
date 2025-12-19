@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
-import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView } from './components/Components';
+import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal } from './components/Components';
 import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon } from './components/Icons';
 import ThemeToggle from './components/ThemeToggle';
 
@@ -14,6 +14,7 @@ export default function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [isUserLoading, setIsUserLoading] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
 
   // Data State
   const [listings, setListings] = useState<Listing[]>([]);
@@ -40,7 +41,6 @@ export default function App() {
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
 
   const fetchListings = async () => {
-    console.log("App: Attempting to fetch from", `${API_URL}/api/listings`);
     try {
       const response = await fetch(`${API_URL}/api/listings`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -178,6 +178,28 @@ export default function App() {
     } catch (error: any) { alert(`Error: ${error.message}`); } finally { setIsListingsLoading(false); }
 };
 
+  const handleUpdateProfile = async (formData: { name: string, email: string, location: string }) => {
+      const token = localStorage.getItem('token');
+      if (!user || !token) return;
+      try {
+          const response = await fetch(`${API_URL}/api/users/me`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+              body: JSON.stringify(formData)
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.message);
+          
+          const updatedUser = { ...user, ...formData };
+          setUser(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          setShowEditProfile(false);
+          alert("Profile updated successfully!");
+      } catch (error: any) {
+          alert(`Failed to update profile: ${error.message}`);
+      }
+  };
+
   const openListing = (id: string) => { setSelectedListingId(id.toString()); setViewState('details'); };
   const startEditListing = (listing: Listing) => { setEditingListing(listing); setViewState('edit'); };
   const openChat = async (listing: Listing) => {
@@ -207,9 +229,17 @@ export default function App() {
     if (user) setViewState(targetView); else setShowAuth(true);
   };
 
+  // Compute categories based on main filter
+  const categoriesToShow = useMemo(() => {
+    if (mainFilter === 'products') return PRODUCT_CATEGORIES;
+    if (mainFilter === 'services') return SERVICE_CATEGORIES;
+    return [...PRODUCT_CATEGORIES, ...SERVICE_CATEGORIES];
+  }, [mainFilter]);
+
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`}>
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} />}
+        {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleUpdateProfile} />}
         {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} />}
         {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === selectedListingId)!} onBack={() => setViewState('home')} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={startEditListing} onChat={openChat} />}
         {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} isSubmitting={isListingsLoading} />}
@@ -244,14 +274,14 @@ export default function App() {
                             <option>All Cities</option>
                             {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={mainFilter} onChange={e => setMainFilter(e.target.value)}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={mainFilter} onChange={e => { setMainFilter(e.target.value); setSelectedCategory('all'); }}>
                             <option value="all">Product or Service</option>
                             <option value="products">Products</option>
                             <option value="services">Services</option>
                         </select>
                         <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
                             <option value="all">All Categories</option>
-                            {[...PRODUCT_CATEGORIES, ...SERVICE_CATEGORIES].map(cat => (
+                            {categoriesToShow.map(cat => (
                                 <option key={cat.value} value={cat.value}>{cat.label}</option>
                             ))}
                         </select>
@@ -299,7 +329,7 @@ export default function App() {
 
         {viewState === 'saved' && user && <SavedView listings={listings} savedIds={savedListingIds} onOpen={openListing} onToggleSave={toggleSave} />}
         {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} />}
-        {viewState === 'profile' && user ? <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={startEditListing} onDeleteListing={(id) => { if(confirm('Delete this listing?')) fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => fetchListings())}} /> : viewState === 'profile' && !user ? <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} /> : null}
+        {viewState === 'profile' && user ? <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={startEditListing} onDeleteListing={(id) => { if(confirm('Delete this listing?')) fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => fetchListings())}} onEditProfile={() => setShowEditProfile(true)} /> : viewState === 'profile' && !user ? <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} /> : null}
 
         {/* Fixed Footer Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-card border-t border-gray-200 dark:border-dark-border z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">

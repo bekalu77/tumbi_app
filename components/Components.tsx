@@ -378,33 +378,47 @@ export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClos
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        // Add real API call here if needed
-        setTimeout(() => {
-            onSave(formData);
-            setIsLoading(false);
-            onClose();
-        }, 500);
+        // Simulate loading then save
+        onSave(formData);
+        setIsLoading(false);
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
-                <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-tumbi-500 text-white">
-                    <h2 className="text-lg font-bold">Edit Profile</h2>
-                    <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full text-white">
-                        <XIcon className="w-5 h-5" />
-                    </button>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-dark-card rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
+                <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-gray-100 dark:hover:bg-dark-bg rounded-full text-gray-500">
+                    <XIcon className="w-5 h-5" />
+                </button>
+                <div className="p-8">
+                    <div className="text-center mb-6">
+                        <div className="inline-block p-3 bg-tumbi-100 dark:bg-tumbi-900/50 rounded-full mb-3">
+                            <UserIcon className="w-8 h-8 text-tumbi-600 dark:text-tumbi-300" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Edit Profile</h2>
+                        <p className="text-sm text-gray-500 dark:text-dark-subtext mt-1">Update your account information.</p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 dark:text-dark-subtext ml-1 uppercase">Full Name</label>
+                            <input required placeholder="Full Name" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 dark:text-dark-subtext ml-1 uppercase">Email Address</label>
+                            <input required type="email" placeholder="Email Address" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 dark:text-dark-subtext ml-1 uppercase">Location</label>
+                            <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
+                                {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                            </select>
+                        </div>
+
+                        <button type="submit" disabled={isLoading} className="w-full bg-tumbi-600 text-white font-bold py-3 rounded-lg hover:bg-tumbi-700 transition-colors disabled:opacity-50 flex items-center justify-center mt-4">
+                             {isLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'Save Changes'}
+                        </button>
+                    </form>
                 </div>
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    <input required placeholder="Full Name" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                    <input required type="email" placeholder="Email Address" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                    <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
-                        {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
-                    </select>
-                    <button type="submit" disabled={isLoading} className="w-full bg-tumbi-600 text-white font-bold py-3 rounded-lg flex justify-center items-center">
-                        {isLoading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'Save Changes'}
-                    </button>
-                </form>
             </div>
         </div>
     );
@@ -544,11 +558,14 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
                     <div className="w-20 h-20 bg-tumbi-100 dark:bg-tumbi-900/50 rounded-full flex items-center justify-center">
                         <span className="text-2xl font-bold text-tumbi-700 dark:text-tumbi-300">{user.name.charAt(0)}</span>
                     </div>
-                    <div>
-                        <h2 className="text-xl font-bold dark:text-dark-text">{user.name}</h2>
-                        <p className="text-gray-500 dark:text-dark-subtext text-sm">{user.email}</p>
-                        <p className="text-gray-400 text-xs mt-1">{user.location}</p>
+                    <div className="flex-1 min-w-0">
+                        <h2 className="text-xl font-bold dark:text-dark-text truncate">{user.name}</h2>
+                        <p className="text-gray-500 dark:text-dark-subtext text-sm truncate">{user.email}</p>
+                        <p className="text-gray-400 text-xs mt-1">{user.location} • {user.phone}</p>
                     </div>
+                    <button onClick={onEditProfile} className="p-2 bg-gray-50 dark:bg-dark-bg rounded-full text-gray-500 hover:text-tumbi-600 transition-colors">
+                        <SettingsIcon className="w-5 h-5" />
+                    </button>
                 </div>
             </div>
 
@@ -558,7 +575,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
                     <ChevronRightIcon className="w-5 h-5 opacity-30" />
                 </button>
                 <button onClick={onEditProfile} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text">
-                    <div className="flex items-center"><SettingsIcon className="w-5 h-5 mr-3" /> Edit Profile</div>
+                    <div className="flex items-center"><UserIcon className="w-5 h-5 mr-3" /> Account Settings</div>
                     <ChevronRightIcon className="w-5 h-5 opacity-30" />
                 </button>
                 <button className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border opacity-50 cursor-not-allowed font-medium text-gray-700 dark:text-dark-text">
@@ -570,9 +587,6 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
                 <div className="pt-4 mt-4 border-t border-gray-100 dark:border-dark-border">
                     <button onClick={onLogout} className="w-full flex items-center p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600">
                         <LogOutIcon className="w-5 h-5 mr-3" /> Log Out
-                    </button>
-                    <button className="w-full flex items-center p-4 mt-2 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600">
-                        <XIcon className="w-5 h-5 mr-3" /> Delete Profile
                     </button>
                 </div>
             </div>

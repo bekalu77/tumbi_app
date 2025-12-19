@@ -57,10 +57,23 @@ const authenticateToken = (req: any, res: any, next: any) => {
 
 app.post('/api/register', async (req, res) => {
     const { name, email, phone, password, location } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ message: 'Name, email, and password are required' });
-    const hashedPassword = bcrypt.hashSync(password, 8);
+    if (!name || !email || !password || !phone) return res.status(400).json({ message: 'Name, email, phone, and password are required' });
+    
     const client = await pool.connect();
     try {
+        // Check for redundant email or phone
+        const existingUser = await client.query('SELECT * FROM users WHERE email = $1 OR phone = $2', [email, phone]);
+        if (existingUser.rows.length > 0) {
+            const user = existingUser.rows[0];
+            if (user.email === email) {
+                return res.status(409).json({ message: 'This email is already registered.' });
+            }
+            if (user.phone === phone) {
+                return res.status(409).json({ message: 'This phone number is already registered.' });
+            }
+        }
+
+        const hashedPassword = bcrypt.hashSync(password, 8);
         const result = await client.query('INSERT INTO users (name, email, phone, password, location) VALUES ($1, $2, $3, $4, $5) RETURNING id', [name, email, phone, hashedPassword, location]);
         const user = { id: result.rows[0].id, name, email, phone, location };
         const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: 86400 });
@@ -87,6 +100,30 @@ app.post('/api/login', async (req, res) => {
         res.status(200).json({ auth: true, token, user });
     } catch (error: any) {
         res.status(500).json({ message: 'Error logging in', error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+// --- User Profile Endpoints ---
+app.put('/api/users/me', authenticateToken, async (req: any, res) => {
+    const { name, email, location } = req.body;
+    const userId = req.user.id;
+
+    if (!name || !email) return res.status(400).json({ message: 'Name and email are required.' });
+
+    const client = await pool.connect();
+    try {
+        // Check if email is already taken by another user
+        const existingEmail = await client.query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, userId]);
+        if (existingEmail.rows.length > 0) {
+            return res.status(409).json({ message: 'This email is already in use by another account.' });
+        }
+
+        await client.query('UPDATE users SET name = $1, email = $2, location = $3 WHERE id = $4', [name, email, location, userId]);
+        res.json({ message: 'Profile updated successfully!' });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Failed to update profile', error: error.message });
     } finally {
         client.release();
     }
@@ -183,6 +220,43 @@ app.post('/api/listings', authenticateToken, async (req: any, res) => {
     } catch (error: any) {
         console.error("CRITICAL: Error creating listing:", error)
         res.status(500).json({ message: 'A server error occurred while creating the listing.', error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.delete('/api/listings/:id', authenticateToken, async (req: any, res) => {
+    const listingId = req.params.id;
+    const userId = req.user.id;
+    const client = await pool.connect();
+    try {
+        const result = await client.query('DELETE FROM listings WHERE id = $1 AND user_id = $2', [listingId, userId]);
+        if (result.rowCount === 0) return res.status(404).json({ message: 'Listing not found or unauthorized' });
+        res.json({ message: 'Listing deleted successfully' });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Failed to delete listing', error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.put('/api/listings/:id', authenticateToken, async (req: any, res) => {
+    const listingId = req.params.id;
+    const userId = req.user.id;
+    const { title, price, unit, location, category, listingType, description, imageUrls } = req.body;
+    
+    if (!title || price === undefined || !unit || !location || !category || !listingType || !description || !imageUrls) {
+        return res.status(400).json({ message: "All fields are required to update a listing." });
+    }
+
+    const imageUrlsString = Array.isArray(imageUrls) ? imageUrls.join(',') : imageUrls;
+    const client = await pool.connect();
+    try {
+        const result = await client.query('UPDATE listings SET title = $1, price = $2, unit = $3, location = $4, category_slug = $5, listing_type = $6, description = $7, image_url = $8 WHERE id = $9 AND user_id = $10', [title, price, unit, location, category, listingType, description, imageUrlsString, listingId, userId]);
+        if (result.rowCount === 0) return res.status(404).json({ message: 'Listing not found or unauthorized' });
+        res.json({ message: 'Listing updated successfully' });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Failed to update listing', error: error.message });
     } finally {
         client.release();
     }
@@ -289,5 +363,3 @@ app.post('/api/messages', authenticateToken, async (req: any, res) => {
 app.listen(port, async () => {
   console.log(`Server running at http://localhost:${port}`);
 });
-
-// ... (interfaces)
