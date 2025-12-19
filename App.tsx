@@ -18,13 +18,20 @@ export default function App() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [isListingsLoading, setIsListingsLoading] = useState(true);
 
+  // Filter UI State
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [mainFilter, setMainFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('All Cities');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000000]);
+  const [tempPriceRange, setPriceRange] = useState<[number, number]>([0, 10000000]);
   const [sortBy, setSortBy] = useState('date-desc');
   
+  // Active Filter state (for "Apply Filter" logic)
+  const [activeFilters, setActiveFilters] = useState({
+    priceRange: [0, 10000000] as [number, number],
+    searchQuery: '',
+  });
+
   const [viewState, setViewState] = useState<ViewState>('home');
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [editingListing, setEditingListing] = useState<Listing | undefined>(undefined);
@@ -84,6 +91,17 @@ export default function App() {
     });
   };
   
+  const resetAllFilters = () => {
+    setSelectedCategory('all');
+    setSelectedCity('All Cities');
+    setPriceRange([0, 10000000]);
+    setSortBy('date-desc');
+    setMainFilter('all');
+    setSearchQuery('');
+    setActiveFilters({ priceRange: [0, 10000000], searchQuery: '' });
+    setViewState('home');
+  };
+
   const checkAuth = (targetView: ViewState) => {
     if (user) {
       setViewState(targetView);
@@ -106,30 +124,35 @@ export default function App() {
     setViewState('home');
   };
 
+  const applyFilters = () => {
+    setActiveFilters({
+        priceRange: tempPriceRange,
+        searchQuery: searchQuery,
+    });
+  };
+
   const filteredListings = useMemo(() => {
     let filtered = listings.filter(item => {
-      // Main Filter Logic (All, Products, Services, Rentals)
+      // Main Filter Logic (All, Products, Services)
       let matchesMainFilter = true;
       if (mainFilter === 'products') {
         matchesMainFilter = item.listingType === 'product';
       } else if (mainFilter === 'services') {
         matchesMainFilter = item.listingType === 'service';
-      } else if (mainFilter === 'rentals') {
-        matchesMainFilter = item.category === 'rental';
       }
 
-      // Category filter (dropdown)
+      // Category filter (dropdown/sidebar)
       const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
       
       // City filter (dropdown)
       const matchesCity = selectedCity === 'All Cities' || item.location === selectedCity;
 
-      // Price range
-      const matchesPrice = item.price >= priceRange[0] && item.price <= priceRange[1];
+      // Price range (only when applied)
+      const matchesPrice = item.price >= activeFilters.priceRange[0] && item.price <= activeFilters.priceRange[1];
 
-      // Search query
-      const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      // Search query (only when applied)
+      const matchesSearch = item.title.toLowerCase().includes(activeFilters.searchQuery.toLowerCase()) || 
+                           (item.description && item.description.toLowerCase().includes(activeFilters.searchQuery.toLowerCase()));
       
       return matchesMainFilter && matchesCategory && matchesCity && matchesPrice && matchesSearch;
     });
@@ -149,7 +172,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [listings, mainFilter, selectedCategory, selectedCity, priceRange, searchQuery, sortBy]);
+  }, [listings, mainFilter, selectedCategory, selectedCity, activeFilters, sortBy]);
 
   const handleSaveListing = async (data: any, photos: File[]) => {
     setIsListingsLoading(true);
@@ -292,22 +315,19 @@ export default function App() {
   };
 
   const Header = () => {
-    const [localSearch, setLocalSearch] = useState(searchQuery);
-    
     const handleSearch = (e: React.FormEvent) => {
       e.preventDefault();
-      setSearchQuery(localSearch);
+      applyFilters();
     }
 
     return (
         <header className="sticky top-0 z-30 bg-tumbi-500 dark:bg-dark-card shadow-md">
-            <div className="max-w-4xl mx-auto px-4 py-3">
+            <div className="max-w-6xl mx-auto px-4 py-3">
                 <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={() => setViewState('home')}>
+                    <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={resetAllFilters}>
                         <h1 className="text-xl font-bold tracking-tight">Tumbi</h1>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm text-white/90 hidden sm:block">{isDarkMode ? 'Dark' : 'Light'}</span>
+                    <div className="flex items-center space-x-4">
                       <ThemeToggle isDark={isDarkMode} toggle={toggleDarkMode} />
                     </div>
                 </div>
@@ -326,8 +346,8 @@ export default function App() {
                             type="text"
                             placeholder="I am looking for..."
                             className="w-full h-10 pl-4 pr-10 rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder-gray-500 dark:placeholder-dark-subtext outline-none focus:ring-2 focus:ring-tumbi-700 shadow-sm text-sm"
-                            value={localSearch}
-                            onChange={(e) => setLocalSearch(e.target.value)}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                         />
                         <button type="submit" className="absolute right-0 top-0 h-10 px-3 text-gray-400 dark:text-dark-subtext">
                              <SearchIcon className="w-5 h-5" />
@@ -335,13 +355,13 @@ export default function App() {
                     </div>
                 </form>
 
-                {/* Desktop Filter Bar (Visible in Home) */}
+                {/* Desktop Filter Bar */}
                 {viewState === 'home' && (
-                    <div className="mt-3 flex flex-wrap gap-2 items-center text-white text-xs">
+                    <div className="mt-3 flex flex-wrap gap-3 items-center text-white text-xs">
                         <div className="flex items-center bg-tumbi-600 dark:bg-dark-border rounded-lg px-2 h-8">
                             <span className="mr-2 opacity-70">Sort:</span>
                             <select 
-                                className="bg-transparent border-none outline-none text-white text-xs p-0 focus:ring-0"
+                                className="bg-transparent border-none outline-none text-white text-xs p-0 focus:ring-0 cursor-pointer"
                                 value={sortBy}
                                 onChange={e => setSortBy(e.target.value)}
                             >
@@ -357,46 +377,25 @@ export default function App() {
                             <input 
                                 type="number" 
                                 placeholder="Min" 
-                                className="bg-transparent border-none outline-none w-12 text-white placeholder-white/50 p-0 text-xs focus:ring-0"
-                                value={priceRange[0] || ''}
-                                onChange={e => setPriceRange([Number(e.target.value), priceRange[1]])}
+                                className="bg-transparent border-none outline-none w-16 text-white placeholder-white/50 p-0 text-xs focus:ring-0"
+                                value={tempPriceRange[0] || ''}
+                                onChange={e => setPriceRange([Number(e.target.value), tempPriceRange[1]])}
                             />
                             <span className="mx-1 opacity-50">-</span>
                             <input 
                                 type="number" 
                                 placeholder="Max" 
-                                className="bg-transparent border-none outline-none w-12 text-white placeholder-white/50 p-0 text-xs focus:ring-0"
-                                value={priceRange[1] === 10000000 ? '' : priceRange[1]}
-                                onChange={e => setPriceRange([priceRange[0], e.target.value ? Number(e.target.value) : 10000000])}
+                                className="bg-transparent border-none outline-none w-16 text-white placeholder-white/50 p-0 text-xs focus:ring-0"
+                                value={tempPriceRange[1] === 10000000 ? '' : tempPriceRange[1]}
+                                onChange={e => setPriceRange([tempPriceRange[0], e.target.value ? Number(e.target.value) : 10000000])}
                             />
                         </div>
 
-                        <div className="flex items-center bg-tumbi-600 dark:bg-dark-border rounded-lg px-2 h-8">
-                             <select 
-                                className="bg-transparent border-none outline-none text-white text-xs p-0 focus:ring-0"
-                                value={selectedCategory}
-                                onChange={e => setSelectedCategory(e.target.value)}
-                            >
-                                <option value="all" className="text-gray-900">All Categories</option>
-                                {[...PRODUCT_CATEGORIES, ...SERVICE_CATEGORIES].map(cat => (
-                                    <option key={cat.value} value={cat.value} className="text-gray-900">{cat.label}</option>
-                                ))}
-                            </select>
-                        </div>
-                        
                         <button 
-                            onClick={() => {
-                                setSelectedCategory('all');
-                                setSelectedCity('All Cities');
-                                setPriceRange([0, 10000000]);
-                                setSortBy('date-desc');
-                                setMainFilter('all');
-                                setLocalSearch('');
-                                setSearchQuery('');
-                            }}
-                            className="text-white/70 hover:text-white"
+                            onClick={applyFilters}
+                            className="bg-white/20 hover:bg-white/30 text-white font-bold px-4 h-8 rounded-lg transition-colors border border-white/20"
                         >
-                            Reset
+                            Apply Filters
                         </button>
                     </div>
                 )}
@@ -406,15 +405,15 @@ export default function App() {
   };
 
   const BottomNav = () => (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-card border-t border-gray-200 dark:border-dark-border z-30 pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-card border-t border-gray-200 dark:border-dark-border z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
       <div className="flex justify-around items-center h-16 max-w-4xl mx-auto px-2">
-        <button onClick={() => setViewState('home')}
-          className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${viewState === 'home' ? 'text-tumbi-600' : 'text-gray-400 dark:text-dark-subtext'}`}>
+        <button onClick={resetAllFilters}
+          className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${viewState === 'home' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>
           <HomeIcon className="w-6 h-6" />
           <span className="text-[10px] font-medium">Home</span>
         </button>
         <button onClick={() => checkAuth('saved')}
-          className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${viewState === 'saved' ? 'text-tumbi-600' : 'text-gray-400 dark:text-dark-subtext'}`}>
+          className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${viewState === 'saved' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>
           <HeartIcon className="w-6 h-6" filled={viewState === 'saved'} />
           <span className="text-[10px] font-medium">Saved</span>
         </button>
@@ -426,12 +425,12 @@ export default function App() {
           <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-medium text-gray-500 dark:text-dark-subtext">Sell</span>
         </div>
         <button onClick={() => checkAuth('messages')}
-          className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${viewState === 'messages' ? 'text-tumbi-600' : 'text-gray-400 dark:text-dark-subtext'}`}>
+          className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${viewState === 'messages' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>
           <MessageCircleIcon className="w-6 h-6" />
           <span className="text-[10px] font-medium">Messages</span>
         </button>
         <button onClick={() => checkAuth('profile')}
-          className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${viewState === 'profile' || viewState === 'register' ? 'text-tumbi-600' : 'text-gray-400 dark:text-dark-subtext'}`}>
+          className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${viewState === 'profile' || viewState === 'register' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>
           <UserIcon className="w-6 h-6" />
           <span className="text-[10px] font-medium">Profile</span>
         </button>
@@ -440,27 +439,44 @@ export default function App() {
   );
 
   const Sidebar = () => (
-    <aside className="hidden lg:block w-64 flex-shrink-0 pr-6">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-4">Categories</h2>
-        <div className="space-y-2">
+    <aside className="hidden lg:block w-72 flex-shrink-0 pr-10 border-r border-gray-100 dark:border-dark-border">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-6">Filter Categories</h2>
+        <div className="space-y-1">
             <button 
                 onClick={() => setSelectedCategory('all')}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${selectedCategory === 'all' ? 'bg-tumbi-100 text-tumbi-700 dark:bg-tumbi-900/30 dark:text-tumbi-300' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}
+                className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${selectedCategory === 'all' ? 'bg-tumbi-500 text-white shadow-md' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}
             >
                 All Categories
             </button>
-            {[...PRODUCT_CATEGORIES, ...SERVICE_CATEGORIES].map(cat => (
+            <div className="pt-2 pb-1 text-[10px] font-bold text-gray-400 dark:text-dark-subtext uppercase tracking-wider px-4">Materials</div>
+            {PRODUCT_CATEGORIES.map(cat => (
                 <button 
                     key={cat.value}
                     onClick={() => setSelectedCategory(prev => prev === cat.value ? 'all' : cat.value)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors ${selectedCategory === cat.value ? 'bg-tumbi-100 text-tumbi-700 dark:bg-tumbi-900/30 dark:text-tumbi-300' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}
+                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${selectedCategory === cat.value ? 'bg-tumbi-50 dark:bg-tumbi-900/20 text-tumbi-700 dark:text-tumbi-300' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}
                 >
                     <span>{cat.label}</span>
                     <input 
                         type="checkbox" 
                         readOnly 
                         checked={selectedCategory === cat.value} 
-                        className="w-4 h-4 rounded text-tumbi-600 focus:ring-tumbi-500 border-gray-300 pointer-events-none" 
+                        className="w-4 h-4 rounded border-gray-300 dark:border-dark-border text-tumbi-600 focus:ring-tumbi-500 bg-white dark:bg-dark-bg cursor-pointer" 
+                    />
+                </button>
+            ))}
+            <div className="pt-4 pb-1 text-[10px] font-bold text-gray-400 dark:text-dark-subtext uppercase tracking-wider px-4">Services</div>
+            {SERVICE_CATEGORIES.map(cat => (
+                <button 
+                    key={cat.value}
+                    onClick={() => setSelectedCategory(prev => prev === cat.value ? 'all' : cat.value)}
+                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${selectedCategory === cat.value ? 'bg-tumbi-50 dark:bg-tumbi-900/20 text-tumbi-700 dark:text-tumbi-300' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}
+                >
+                    <span>{cat.label}</span>
+                    <input 
+                        type="checkbox" 
+                        readOnly 
+                        checked={selectedCategory === cat.value} 
+                        className="w-4 h-4 rounded border-gray-300 dark:border-dark-border text-tumbi-600 focus:ring-tumbi-500 bg-white dark:bg-dark-bg cursor-pointer" 
                     />
                 </button>
             ))}
@@ -469,17 +485,17 @@ export default function App() {
   );
 
   const HomeContent = () => (
-    <div className="max-w-6xl mx-auto px-4 py-6 flex">
+    <div className="max-w-7xl mx-auto px-4 py-8 flex">
       <Sidebar />
-      <main className="flex-1">
+      <main className="flex-1 lg:pl-10">
         {/* Main Filter Tabs */}
-        <div className="mb-6">
-            <div className="flex space-x-2 overflow-x-auto no-scrollbar pb-2">
-            {['all', 'products', 'services', 'rentals'].map(filter => (
+        <div className="mb-8">
+            <div className="flex space-x-3 overflow-x-auto no-scrollbar pb-2">
+            {['all', 'products', 'services'].map(filter => (
                 <button
                 key={filter}
                 onClick={() => setMainFilter(filter)}
-                className={`px-6 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${mainFilter === filter ? 'bg-tumbi-500 text-white shadow-md' : 'bg-white dark:bg-dark-card text-gray-700 dark:text-dark-subtext border border-gray-200 dark:border-dark-border'}`}
+                className={`px-8 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-200 ${mainFilter === filter ? 'bg-tumbi-500 text-white shadow-lg shadow-tumbi-200 dark:shadow-none translate-y-[-1px]' : 'bg-white dark:bg-dark-card text-gray-600 dark:text-dark-subtext border border-gray-200 dark:border-dark-border hover:border-tumbi-300 dark:hover:border-tumbi-700'}`}
                 >
                 {filter === 'all' ? 'All Ads' : filter.charAt(0).toUpperCase() + filter.slice(1)}
                 </button>
@@ -489,13 +505,13 @@ export default function App() {
 
         {/* Main Listings */}
         {isListingsLoading ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 {[1,2,3,4,5,6].map(i => (
-                    <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-lg aspect-square animate-pulse"></div>
+                    <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-2xl aspect-square animate-pulse"></div>
                 ))}
             </div>
         ) : filteredListings.length > 0 ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredListings.map(item => (
                 <ListingCard
                     key={item.id}
@@ -507,12 +523,13 @@ export default function App() {
             ))}
             </div>
         ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="bg-gray-100 dark:bg-dark-card p-6 rounded-full mb-4">
-                <SearchIcon className="w-8 h-8 text-gray-400 dark:text-dark-subtext" />
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="bg-gray-100 dark:bg-dark-card p-8 rounded-full mb-6">
+                <SearchIcon className="w-10 h-10 text-gray-400 dark:text-dark-subtext" />
             </div>
-            <p className="text-gray-600 dark:text-dark-text font-medium">No results found.</p>
-            <p className="text-gray-400 dark:text-dark-subtext text-sm mt-1">Try adjusting your filters or search query.</p>
+            <p className="text-xl text-gray-600 dark:text-dark-text font-bold">No items found</p>
+            <p className="text-gray-400 dark:text-dark-subtext mt-2">Try changing your filters or search query.</p>
+            <button onClick={resetAllFilters} className="mt-6 text-tumbi-600 dark:text-tumbi-400 font-bold hover:underline">Clear all filters</button>
             </div>
         )}
       </main>
@@ -520,11 +537,14 @@ export default function App() {
   );
 
   if (isUserLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg text-tumbi-600 font-bold">Loading Tumbi...</div>
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg text-tumbi-600 font-bold">
+        <div className="w-8 h-8 border-4 border-tumbi-500 border-t-transparent rounded-full animate-spin mr-3"></div>
+        Loading Tumbi...
+    </div>
   }
 
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24`}>
+    <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`}>
         {showAuth && (
             <AuthModal 
                 onClose={() => setShowAuth(false)} 
