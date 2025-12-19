@@ -106,13 +106,15 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing, onClick }) =>
   return (
     <div onClick={onClick} className="mb-3 break-inside-avoid cursor-pointer">
       <div className="bg-white dark:bg-dark-card rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-        <img src={firstImage} alt={listing.title} className="w-full h-auto object-cover" />
+        <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-dark-border">
+            <img src={firstImage} alt={listing.title} className="w-full h-full object-cover" />
+        </div>
         <div className="p-3">
           <h3 className="font-normal text-sm text-gray-800 dark:text-dark-text line-clamp-2">{listing.title}</h3>
           <p className="text-base font-bold text-tumbi-600 dark:text-tumbi-400 mt-1">ETB {listing.price.toLocaleString()}</p>
           <div className="text-xs text-gray-500 dark:text-dark-subtext mt-2 space-y-1">
             <p className="truncate">{listing.location}</p>
-            <p>Brand New • {listing.category}</p>
+            <p>{listing.category}</p>
           </div>
         </div>
       </div>
@@ -296,7 +298,7 @@ export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listin
                      <p>You haven't saved any items yet.</p>
                  </div>
              ) : (
-                <div className="columns-2 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     {savedListings.map(item => (
                         <ListingCard key={item.id} listing={item} onClick={() => onOpen(String(item.id))} />
                     ))}

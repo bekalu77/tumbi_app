@@ -65,7 +65,7 @@ export const CameraIcon = ({ className = 'w-6 h-6' }) => (
 
 export const SettingsIcon = ({ className = 'w-6 h-6' }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
-        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.73l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.73l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.73l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.73l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
         <circle cx="12" cy="12" r="3" />
     </svg>
 );
@@ -161,3 +161,46 @@ export const TruckIcon = ({ className = 'w-6 h-6' }) => (
         <circle cx="17" cy="18" r="2"/>
     </svg>
 );
+
+export const ServicesIcon = WrenchIcon;
+export const MaterialsIcon = HammerIcon;
+export const RentalIcon = TruckIcon;
+export const EquipmentIcon = TruckIcon;
+export const ToolsIcon = HammerIcon;
+export const ElectricalIcon = (props: any) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} {...props}>
+        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+    </svg>
+);
+export const PlumbingIcon = (props: any) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} {...props}>
+        <path d="M11 7a2 2 0 1 1-2-2" />
+        <path d="M7 15a2 2 0 1 0 2 2" />
+        <path d="M12 9h.01" />
+        <path d="M12 15h.01" />
+        <path d="M15 12h.01" />
+        <path d="M9 12h.01" />
+        <circle cx="12" cy="12" r="10" />
+    </svg>
+);
+export const FixturesIcon = (props: any) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} {...props}>
+        <path d="M12 2v2" />
+        <path d="m4.93 4.93 1.41 1.41" />
+        <path d="M2 12h2" />
+        <path d="m6.34 17.66-1.41 1.41" />
+        <path d="M12 20v2" />
+        <path d="m17.66 17.66 1.41 1.41" />
+        <path d="M20 12h2" />
+        <path d="m19.07 4.93-1.41 1.41" />
+    </svg>
+);
+export const SafetyIcon = (props: any) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} {...props}>
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+);
+export const LaborIcon = UserIcon;
+export const SkilledIcon = HammerIcon;
+export const ConsultationIcon = HelpCircleIcon;
+export const MaintenanceIcon = WrenchIcon;

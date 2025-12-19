@@ -1,12 +1,12 @@
 import React from 'react';
 import { Category } from './types';
-import { HammerIcon, HomeIcon } from './components/Icons';
+import { HammerIcon, HomeIcon, ServicesIcon, MaterialsIcon, RentalIcon } from './components/Icons';
 
 export const CATEGORIES: Category[] = [
   { id: '1', name: 'All', slug: 'all', icon: <HomeIcon className="w-5 h-5" /> },
-  { id: '2', name: 'Materials', slug: 'materials', icon: <HammerIcon className="w-5 h-5" /> },
-  { id: '3', name: 'Services', slug: 'services', icon: <HammerIcon className="w-5 h-5" /> },
-  { id: '4', name: 'Equipment', slug: 'equipment', icon: <HammerIcon className="w-5 h-5" /> },
+  { id: '2', name: 'Materials', slug: 'materials', icon: <MaterialsIcon className="w-5 h-5" /> },
+  { id: '3', name: 'Services', slug: 'services', icon: <ServicesIcon className="w-5 h-5" /> },
+  { id: '4', name: 'Rentals', slug: 'rentals', icon: <RentalIcon className="w-5 h-5" /> },
 ];
 
 export const PRODUCT_CATEGORIES = [
@@ -24,6 +24,28 @@ export const SERVICE_CATEGORIES = [
   { value: 'consultation', label: 'Consultation & Design' },
   { value: 'rental', label: 'Equipment Rental' },
   { value: 'maintenance', label: 'Repair & Maintenance' },
+];
+
+export const ETHIOPIAN_CITIES = [
+  'Addis Ababa',
+  'Adama',
+  'Bahir Dar',
+  'Bishoftu',
+  'Debre Berhan',
+  'Dessie',
+  'Dire Dawa',
+  'Gondar',
+  'Hawassa',
+  'Jimma',
+  'Mekelle',
+  'Shashamane',
+  'Sodo',
+  'Arba Minch',
+  'Hosaena',
+  'Jijiga',
+  'Asosa',
+  'Gambela',
+  'Semera'
 ];
 
 export const MEASUREMENT_UNITS = [

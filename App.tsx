@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { CATEGORIES, PRODUCT_CATEGORIES, SERVICE_CATEGORIES } from './constants';
+import { CATEGORIES, PRODUCT_CATEGORIES, SERVICE_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
-import { ListingCard, CategoryPill, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, RecommendedCard } from './components/Components';
-import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon } from './components/Icons';
+import { ListingCard, CategoryPill, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView } from './components/Components';
+import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon, MapPinIcon } from './components/Icons';
 import ThemeToggle from './components/ThemeToggle';
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -19,9 +19,12 @@ export default function App() {
   const [isListingsLoading, setIsListingsLoading] = useState(true);
 
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [headerFilter, setHeaderFilter] = useState('all');
   const [mainFilter, setMainFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCity, setSelectedCity] = useState('All Cities');
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000000]);
+  const [sortBy, setSortBy] = useState('date-desc');
+  
   const [viewState, setViewState] = useState<ViewState>('home');
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [editingListing, setEditingListing] = useState<Listing | undefined>(undefined);
@@ -104,20 +107,49 @@ export default function App() {
   };
 
   const filteredListings = useMemo(() => {
-    return listings.filter(item => {
-      const matchesCategoryPill = selectedCategory === 'all' || item.category === selectedCategory || (selectedCategory === 'materials' && item.listingType === 'product') || (selectedCategory === 'services' && item.listingType === 'service');
-      let matchesHeaderFilter = true;
-      if (headerFilter !== 'all') {
-        matchesHeaderFilter = item.category === headerFilter || item.listingType === headerFilter;
-      }
+    let filtered = listings.filter(item => {
+      // Main Filter Logic (All, Products, Services, Rentals)
       let matchesMainFilter = true;
-      if (mainFilter !== 'all') {
-        matchesMainFilter = item.listingType === mainFilter;
+      if (mainFilter === 'products') {
+        matchesMainFilter = item.listingType === 'product';
+      } else if (mainFilter === 'services') {
+        matchesMainFilter = item.listingType === 'service';
+      } else if (mainFilter === 'rentals') {
+        matchesMainFilter = item.category === 'rental';
       }
-      const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
-      return matchesCategoryPill && matchesSearch && matchesHeaderFilter && matchesMainFilter;
+
+      // Category filter (dropdown)
+      const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+      
+      // City filter (dropdown)
+      const matchesCity = selectedCity === 'All Cities' || item.location === selectedCity;
+
+      // Price range
+      const matchesPrice = item.price >= priceRange[0] && item.price <= priceRange[1];
+
+      // Search query
+      const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      return matchesMainFilter && matchesCategory && matchesCity && matchesPrice && matchesSearch;
     });
-  }, [listings, selectedCategory, searchQuery, headerFilter, mainFilter]);
+
+    // Sorting
+    filtered.sort((a, b) => {
+      if (sortBy === 'date-desc') {
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      } else if (sortBy === 'date-asc') {
+        return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+      } else if (sortBy === 'price-asc') {
+        return a.price - b.price;
+      } else if (sortBy === 'price-desc') {
+        return b.price - a.price;
+      }
+      return 0;
+    });
+
+    return filtered;
+  }, [listings, mainFilter, selectedCategory, selectedCity, priceRange, searchQuery, sortBy]);
 
   const handleSaveListing = async (data: any, photos: File[]) => {
     setIsListingsLoading(true);
@@ -283,8 +315,11 @@ export default function App() {
                 <form onSubmit={handleSearch} className="flex space-x-2">
                     <select
                         className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-sm outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700"
+                        value={selectedCity}
+                        onChange={e => setSelectedCity(e.target.value)}
                     >
-                        <option>All Ethiopia</option>
+                        <option>All Cities</option>
+                        {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                     </select>
                     <div className="relative flex-grow">
                         <input
@@ -299,6 +334,72 @@ export default function App() {
                         </button>
                     </div>
                 </form>
+
+                {/* Desktop Filter Bar (Visible in Home) */}
+                {viewState === 'home' && (
+                    <div className="mt-3 flex flex-wrap gap-2 items-center text-white text-xs">
+                        <div className="flex items-center bg-tumbi-600 dark:bg-dark-border rounded-lg px-2 h-8">
+                            <span className="mr-2 opacity-70">Sort:</span>
+                            <select 
+                                className="bg-transparent border-none outline-none text-white text-xs p-0 focus:ring-0"
+                                value={sortBy}
+                                onChange={e => setSortBy(e.target.value)}
+                            >
+                                <option value="date-desc" className="text-gray-900">Newest</option>
+                                <option value="date-asc" className="text-gray-900">Oldest</option>
+                                <option value="price-asc" className="text-gray-900">Price: Low-High</option>
+                                <option value="price-desc" className="text-gray-900">Price: High-Low</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center bg-tumbi-600 dark:bg-dark-border rounded-lg px-2 h-8">
+                            <span className="mr-2 opacity-70">Price:</span>
+                            <input 
+                                type="number" 
+                                placeholder="Min" 
+                                className="bg-transparent border-none outline-none w-12 text-white placeholder-white/50 p-0 text-xs focus:ring-0"
+                                value={priceRange[0] || ''}
+                                onChange={e => setPriceRange([Number(e.target.value), priceRange[1]])}
+                            />
+                            <span className="mx-1 opacity-50">-</span>
+                            <input 
+                                type="number" 
+                                placeholder="Max" 
+                                className="bg-transparent border-none outline-none w-12 text-white placeholder-white/50 p-0 text-xs focus:ring-0"
+                                value={priceRange[1] === 10000000 ? '' : priceRange[1]}
+                                onChange={e => setPriceRange([priceRange[0], e.target.value ? Number(e.target.value) : 10000000])}
+                            />
+                        </div>
+
+                        <div className="flex items-center bg-tumbi-600 dark:bg-dark-border rounded-lg px-2 h-8">
+                             <select 
+                                className="bg-transparent border-none outline-none text-white text-xs p-0 focus:ring-0"
+                                value={selectedCategory}
+                                onChange={e => setSelectedCategory(e.target.value)}
+                            >
+                                <option value="all" className="text-gray-900">All Categories</option>
+                                {[...PRODUCT_CATEGORIES, ...SERVICE_CATEGORIES].map(cat => (
+                                    <option key={cat.value} value={cat.value} className="text-gray-900">{cat.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        <button 
+                            onClick={() => {
+                                setSelectedCategory('all');
+                                setSelectedCity('All Cities');
+                                setPriceRange([0, 10000000]);
+                                setSortBy('date-desc');
+                                setMainFilter('all');
+                                setLocalSearch('');
+                                setSearchQuery('');
+                            }}
+                            className="text-white/70 hover:text-white"
+                        >
+                            Reset
+                        </button>
+                    </div>
+                )}
             </div>
         </header>
     );
@@ -340,47 +441,35 @@ export default function App() {
 
   const HomeContent = () => (
     <main className="max-w-4xl mx-auto px-2 py-4 pb-24">
-      {/* Filter Tabs */}
-      <div className="mb-4">
+      {/* Main Filter Tabs */}
+      <div className="mb-6">
         <div className="flex space-x-2 overflow-x-auto no-scrollbar pb-2">
-          {['all', 'products', 'services'].map(filter => (
+          {['all', 'products', 'services', 'rentals'].map(filter => (
             <button
               key={filter}
               onClick={() => setMainFilter(filter)}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${mainFilter === filter ? 'bg-tumbi-500 text-white' : 'bg-gray-200 dark:bg-dark-card text-gray-700 dark:text-dark-subtext'}`}
+              className={`px-6 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${mainFilter === filter ? 'bg-tumbi-500 text-white shadow-md' : 'bg-white dark:bg-dark-card text-gray-700 dark:text-dark-subtext border border-gray-200 dark:border-dark-border'}`}
             >
-              {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+              {filter === 'all' ? 'All Ads' : filter.charAt(0).toUpperCase() + filter.slice(1)}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Recommended Section */}
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-gray-800 dark:text-dark-text px-2 mb-2">Recommended for you</h2>
-        <div className="flex space-x-3 overflow-x-auto no-scrollbar pb-2 -mx-2 px-2">
-            {PRODUCT_CATEGORIES.slice(0, 5).map(cat => (
-                <RecommendedCard key={cat.value} category={cat} onClick={() => { setSelectedCategory(cat.value); }} />
-            ))}
-        </div>
-      </div>
-
       {/* Main Listings */}
       {isListingsLoading ? (
-        <div className="columns-2 gap-3">
-            {[1,2,3,4].map(i => (
-                <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-lg h-40 mb-3 animate-pulse"></div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            {[1,2,3,4,5,6].map(i => (
+                <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-lg aspect-square animate-pulse"></div>
             ))}
         </div>
       ) : filteredListings.length > 0 ? (
-        <div className="columns-2 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredListings.map(item => (
             <ListingCard
               key={item.id}
               listing={item}
               onClick={() => openListing(String(item.id))}
-              isSaved={savedListingIds.has(String(item.id))}
-              onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }}
             />
           ))}
         </div>
