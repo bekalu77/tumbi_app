@@ -141,6 +141,20 @@ export default function App() {
     return filtered;
   }, [listings, mainFilter, selectedCategory, selectedCity, appliedFilters, sortBy]);
 
+  const handleAuthSuccess = (data: { auth: boolean, token: string, user: User }) => {
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    setUser(data.user);
+    setShowAuth(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    setViewState('home');
+  };
+
   const handleSaveListing = async (data: any, photos: File[]) => {
     setIsListingsLoading(true);
     const token = localStorage.getItem('token');
@@ -232,7 +246,7 @@ export default function App() {
                     </div>
                 </div>
                 {viewState === 'home' && (
-                    <div className="mt-3 flex flex-wrap gap-3 items-center text-white text-xs">
+                    <div className="mt-3 flex flex-wrap gap-2 items-center text-white text-xs">
                         <div className="flex items-center bg-tumbi-600 dark:bg-dark-border rounded-lg px-2 h-8">
                             <span className="mr-2 opacity-70">Sort:</span>
                             <select className="bg-transparent border-none outline-none text-white text-xs p-0 focus:ring-0 cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
@@ -244,11 +258,11 @@ export default function App() {
                         </div>
                         <div className="flex items-center bg-tumbi-600 dark:bg-dark-border rounded-lg px-2 h-8">
                             <span className="mr-2 opacity-70">Price:</span>
-                            <input type="number" placeholder="Min" className="bg-transparent border-none outline-none w-16 text-white placeholder-white/50 p-0 text-xs focus:ring-0" value={minPriceInput} onChange={e => setMinPriceInput(e.target.value)} />
+                            <input type="number" placeholder="Min" className="bg-transparent border-none outline-none w-12 text-white placeholder-white/50 p-0 text-xs focus:ring-0" value={minPriceInput} onChange={e => setMinPriceInput(e.target.value)} />
                             <span className="mx-1 opacity-50">-</span>
-                            <input type="number" placeholder="Max" className="bg-transparent border-none outline-none w-16 text-white placeholder-white/50 p-0 text-xs focus:ring-0" value={maxPriceInput} onChange={e => setMaxPriceInput(e.target.value)} />
+                            <input type="number" placeholder="Max" className="bg-transparent border-none outline-none w-12 text-white placeholder-white/50 p-0 text-xs focus:ring-0" value={maxPriceInput} onChange={e => setMaxPriceInput(e.target.value)} />
                         </div>
-                        <button onClick={handleApplyFilters} className="bg-white/20 hover:bg-white/30 text-white font-bold px-4 h-8 rounded-lg transition-colors border border-white/20">Apply Filters</button>
+                        <button onClick={handleApplyFilters} className="bg-white/20 hover:bg-white/30 text-white font-bold px-3 h-8 rounded-lg transition-colors border border-white/20">Apply</button>
                     </div>
                 )}
             </div>
@@ -256,7 +270,7 @@ export default function App() {
 
         {/* Content Section */}
         {viewState === 'home' && (
-            <div className="max-w-7xl mx-auto px-4 py-8 flex">
+            <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row">
                 <aside className="hidden lg:block w-72 flex-shrink-0 pr-10 border-r border-gray-100 dark:border-dark-border">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-6">Filter Categories</h2>
                     <div className="space-y-1">
@@ -278,9 +292,9 @@ export default function App() {
                     </div>
                 </aside>
                 <main className="flex-1 lg:pl-10">
-                    <div className="mb-8 flex space-x-3 overflow-x-auto no-scrollbar pb-2">
+                    <div className="mb-8 flex space-x-2 overflow-x-auto no-scrollbar pb-2">
                         {['all', 'products', 'services'].map(filter => (
-                            <button key={filter} onClick={() => setMainFilter(filter)} className={`px-8 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-200 ${mainFilter === filter ? 'bg-tumbi-500 text-white shadow-lg shadow-tumbi-200 dark:shadow-none' : 'bg-white dark:bg-dark-card text-gray-600 dark:text-dark-subtext border border-gray-200 dark:border-dark-border hover:border-tumbi-300'}`}>{filter === 'all' ? 'All Ads' : filter.charAt(0).toUpperCase() + filter.slice(1)}</button>
+                            <button key={filter} onClick={() => setMainFilter(filter)} className={`flex-1 min-w-[80px] max-w-[120px] py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-200 ${mainFilter === filter ? 'bg-tumbi-500 text-white shadow-lg' : 'bg-white dark:bg-dark-card text-gray-600 dark:text-dark-subtext border border-gray-200 dark:border-dark-border'}`}>{filter === 'all' ? 'All Ads' : filter.charAt(0).toUpperCase() + filter.slice(1)}</button>
                         ))}
                     </div>
                     {isListingsLoading ? (
@@ -306,7 +320,7 @@ export default function App() {
 
         {viewState === 'saved' && user && <SavedView listings={listings} savedIds={savedListingIds} onOpen={openListing} onToggleSave={toggleSave} />}
         {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} />}
-        {viewState === 'profile' && user ? <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} /> : viewState === 'profile' && !user ? <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} /> : null}
+        {viewState === 'profile' && user ? <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={startEditListing} onDeleteListing={(id) => { if(confirm('Delete this listing?')) fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => fetchListings())}} /> : viewState === 'profile' && !user ? <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} /> : null}
 
         {/* Fixed Footer Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-card border-t border-gray-200 dark:border-dark-border z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">

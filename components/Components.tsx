@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
-import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, HeartIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon } from './Icons';
+import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, HeartIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon } from './Icons';
 import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
@@ -145,9 +145,12 @@ interface ListingCardProps {
   onClick: () => void;
   isSaved?: boolean;
   onToggleSave?: (e: React.MouseEvent) => void;
+  onEdit?: (listing: Listing) => void;
+  onDelete?: (id: string) => void;
+  showActions?: boolean;
 }
 
-export const ListingCard: React.FC<ListingCardProps> = ({ listing, onClick, isSaved = false, onToggleSave }) => {
+export const ListingCard: React.FC<ListingCardProps> = ({ listing, onClick, isSaved = false, onToggleSave, onEdit, onDelete, showActions = false }) => {
     const firstImage = Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0 
         ? listing.imageUrls[0]
         : 'https://picsum.photos/400/300?random=42';
@@ -157,13 +160,23 @@ export const ListingCard: React.FC<ListingCardProps> = ({ listing, onClick, isSa
       <div className="bg-white dark:bg-dark-card rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
         <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-dark-border relative">
             <img src={firstImage} alt={listing.title} className="w-full h-full object-cover" />
-            {onToggleSave && (
+            {onToggleSave && !showActions && (
                 <button 
                     onClick={onToggleSave}
                     className="absolute top-2 right-2 p-1.5 rounded-full bg-white/80 dark:bg-dark-card/80 hover:bg-white dark:hover:bg-dark-card transition-colors z-10 shadow-sm"
                 >
                     <HeartIcon className={`w-4 h-4 ${isSaved ? 'text-red-500 fill-current' : 'text-gray-400 dark:text-dark-subtext'}`} filled={isSaved} />
                 </button>
+            )}
+            {showActions && (
+                <div className="absolute top-2 right-2 flex space-x-2 z-10">
+                    <button onClick={(e) => { e.stopPropagation(); onEdit?.(listing); }} className="p-1.5 rounded-full bg-white/90 text-gray-700 hover:bg-white shadow-sm">
+                        <SettingsIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete?.(String(listing.id)); }} className="p-1.5 rounded-full bg-red-500/90 text-white hover:bg-red-500 shadow-sm">
+                        <TrashIcon className="w-4 h-4" />
+                    </button>
+                </div>
             )}
         </div>
         <div className="p-3">
@@ -356,8 +369,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
   );
 };
 
-// --- Other Views (Saved, Messages, Profile, etc.) ---
-// These have been updated with dark mode styling.
+// --- Other Views ---
 export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listings: Listing[], onOpen: (id: string) => void, savedIds: Set<string>, onToggleSave: (id: string) => void }) => {
     const savedListings = listings.filter(l => savedIds.has(String(l.id)));
     return (
@@ -434,27 +446,79 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
     );
 };
 
-export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean }) => (
-    <div className="max-w-4xl mx-auto p-4 pb-24">
-        <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-dark-border p-6 mb-4 flex items-center space-x-4">
-            <div className="w-20 h-20 bg-tumbi-100 dark:bg-tumbi-900/50 rounded-full flex items-center justify-center">
-                <span className="text-2xl font-bold text-tumbi-700 dark:text-tumbi-300">{user.name.charAt(0)}</span>
+export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode, onEditListing, onDeleteListing }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean, onEditListing: (listing: Listing) => void, onDeleteListing: (id: string) => void }) => {
+    const [subPage, setSubPage] = useState<'main' | 'my-listings'>('main');
+    const myListings = listings.filter(l => l.sellerId === user.id);
+
+    if (subPage === 'my-listings') {
+        return (
+            <div className="max-w-4xl mx-auto p-4 pb-24">
+                <div className="flex items-center space-x-4 mb-6">
+                    <button onClick={() => setSubPage('main')} className="p-2 hover:bg-gray-100 dark:hover:bg-dark-card rounded-full"><ChevronLeftIcon className="w-6 h-6 dark:text-dark-text" /></button>
+                    <h2 className="text-2xl font-bold dark:text-dark-text">My Listings</h2>
+                </div>
+                {myListings.length === 0 ? (
+                    <p className="text-center py-20 text-gray-500">You haven't posted any ads yet.</p>
+                ) : (
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        {myListings.map(item => (
+                            <ListingCard 
+                                key={item.id} 
+                                listing={item} 
+                                onClick={() => onOpenListing(String(item.id))} 
+                                showActions={true}
+                                onEdit={onEditListing}
+                                onDelete={onDeleteListing}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
-            <div>
-                <h2 className="text-xl font-bold dark:text-dark-text">{user.name}</h2>
-                <p className="text-gray-500 dark:text-dark-subtext text-sm">{user.location}</p>
+        );
+    }
+
+    return (
+        <div className="max-w-4xl mx-auto p-4 pb-24">
+            <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-dark-border p-6 mb-6">
+                <div className="flex items-center space-x-4">
+                    <div className="w-20 h-20 bg-tumbi-100 dark:bg-tumbi-900/50 rounded-full flex items-center justify-center">
+                        <span className="text-2xl font-bold text-tumbi-700 dark:text-tumbi-300">{user.name.charAt(0)}</span>
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold dark:text-dark-text">{user.name}</h2>
+                        <p className="text-gray-500 dark:text-dark-subtext text-sm">{user.email}</p>
+                        <p className="text-gray-400 text-xs mt-1">{user.location}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <button onClick={() => setSubPage('my-listings')} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text">
+                    <div className="flex items-center"><HammerIcon className="w-5 h-5 mr-3" /> My Listings</div>
+                    <ChevronRightIcon className="w-5 h-5 opacity-30" />
+                </button>
+                <button className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text">
+                    <div className="flex items-center"><SettingsIcon className="w-5 h-5 mr-3" /> Edit Profile</div>
+                    <ChevronRightIcon className="w-5 h-5 opacity-30" />
+                </button>
+                <button className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border opacity-50 cursor-not-allowed font-medium text-gray-700 dark:text-dark-text">
+                    <div className="flex items-center"><PlusIcon className="w-5 h-5 mr-3" /> Upgrade to Pro <span className="ml-2 text-[10px] bg-tumbi-100 text-tumbi-700 px-1.5 py-0.5 rounded">Coming Soon</span></div>
+                </button>
+                <button onClick={toggleDarkMode} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text">
+                    <div className="flex items-center">{isDarkMode ? <SunIcon className="w-5 h-5 mr-3" /> : <MoonIcon className="w-5 h-5 mr-3" />} Toggle Theme</div>
+                </button>
+                <div className="pt-4 mt-4 border-t border-gray-100 dark:border-dark-border">
+                    <button onClick={onLogout} className="w-full flex items-center p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600">
+                        <LogOutIcon className="w-5 h-5 mr-3" /> Log Out
+                    </button>
+                    <button className="w-full flex items-center p-4 mt-2 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600">
+                        <XIcon className="w-5 h-5 mr-3" /> Delete Profile
+                    </button>
+                </div>
             </div>
         </div>
-        <div className="space-y-2">
-            <button onClick={toggleDarkMode} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text flex justify-between items-center group">
-                <div className="flex items-center">{isDarkMode ? <SunIcon className="w-5 h-5 mr-3" /> : <MoonIcon className="w-5 h-5 mr-3" />}Toggle Theme</div>
-            </button>
-            <button onClick={onLogout} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600 flex justify-between items-center group">
-                <div className="flex items-center"><LogOutIcon className="w-5 h-5 mr-3" /> Log Out</div>
-            </button>
-        </div>
-    </div>
-);
+    );
+};
 
 export const ChatConversationView = ({ session, user, onBack }: { session: ChatSession; user: User; onBack: () => void }) => {
     const [messages, setMessages] = useState<Message[]>([]);
