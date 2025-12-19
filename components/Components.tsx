@@ -370,6 +370,46 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
   );
 };
 
+// --- Edit Profile Modal ---
+export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClose: () => void, onSave: (data: { name: string, email: string, location: string }) => void }) => {
+    const [formData, setFormData] = useState({ name: user.name, email: user.email, location: user.location });
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        // Add real API call here if needed
+        setTimeout(() => {
+            onSave(formData);
+            setIsLoading(false);
+            onClose();
+        }, 500);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-dark-card rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
+                <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-tumbi-500 text-white">
+                    <h2 className="text-lg font-bold">Edit Profile</h2>
+                    <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full text-white">
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <input required placeholder="Full Name" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    <input required type="email" placeholder="Email Address" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                    <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
+                        {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                    </select>
+                    <button type="submit" disabled={isLoading} className="w-full bg-tumbi-600 text-white font-bold py-3 rounded-lg flex justify-center items-center">
+                        {isLoading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'Save Changes'}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 // --- Other Views ---
 export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listings: Listing[], onOpen: (id: string) => void, savedIds: Set<string>, onToggleSave: (id: string) => void }) => {
     const savedListings = listings.filter(l => savedIds.has(String(l.id)));
@@ -466,7 +506,7 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
     );
 };
 
-export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode, onEditListing, onDeleteListing }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean, onEditListing: (listing: Listing) => void, onDeleteListing: (id: string) => void }) => {
+export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode, onEditListing, onDeleteListing, onEditProfile }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean, onEditListing: (listing: Listing) => void, onDeleteListing: (id: string) => void, onEditProfile: () => void }) => {
     const [subPage, setSubPage] = useState<'main' | 'my-listings'>('main');
     const myListings = listings.filter(l => l.sellerId === user.id);
 
@@ -517,7 +557,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
                     <div className="flex items-center"><HammerIcon className="w-5 h-5 mr-3" /> My Listings</div>
                     <ChevronRightIcon className="w-5 h-5 opacity-30" />
                 </button>
-                <button className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text">
+                <button onClick={onEditProfile} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text">
                     <div className="flex items-center"><SettingsIcon className="w-5 h-5 mr-3" /> Edit Profile</div>
                     <ChevronRightIcon className="w-5 h-5 opacity-30" />
                 </button>
@@ -631,7 +671,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
     const goToPrev = () => setCurrentImageIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length);
 
     return (
-        <div className="fixed inset-0 z-40 bg-white dark:bg-dark-bg flex flex-col overflow-y-auto">
+        <div className="fixed inset-0 z-40 bg-white dark:bg-dark-bg flex flex-col overflow-y-auto pb-24">
             <div className="sticky top-0 bg-white dark:bg-dark-card z-10 flex items-center p-4 border-b dark:border-dark-border justify-between">
                 <div className="flex items-center flex-1 truncate">
                     <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full">
@@ -644,7 +684,6 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                 </button>
             </div>
             
-            {/* Call/Chat Buttons placed prominently at the top if not owner */}
             {!isOwner && (
                 <div className="p-4 bg-gray-50 dark:bg-dark-bg flex space-x-3 border-b dark:border-dark-border">
                     <a href={`tel:${listing.sellerPhone || ''}`} className="flex-1 bg-white dark:bg-dark-card border-2 border-tumbi-500 text-tumbi-600 hover:bg-tumbi-50 font-bold py-3 rounded-xl flex items-center justify-center transition-colors">
@@ -685,9 +724,8 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                 </div>
             </div>
             
-            {/* Owner Actions at bottom */}
             {isOwner && (
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-dark-card border-t dark:border-dark-border flex items-center justify-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-dark-card border-t dark:border-dark-border flex items-center justify-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20">
                      <button onClick={() => onEdit(listing)} className="w-full max-w-md bg-gray-900 dark:bg-tumbi-700 hover:bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center"><SettingsIcon className="w-5 h-5 mr-2" />Edit Listing</button>
                 </div>
             )}
