@@ -439,50 +439,84 @@ export default function App() {
     </nav>
   );
 
-  const HomeContent = () => (
-    <main className="max-w-4xl mx-auto px-2 py-4 pb-24">
-      {/* Main Filter Tabs */}
-      <div className="mb-6">
-        <div className="flex space-x-2 overflow-x-auto no-scrollbar pb-2">
-          {['all', 'products', 'services', 'rentals'].map(filter => (
-            <button
-              key={filter}
-              onClick={() => setMainFilter(filter)}
-              className={`px-6 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${mainFilter === filter ? 'bg-tumbi-500 text-white shadow-md' : 'bg-white dark:bg-dark-card text-gray-700 dark:text-dark-subtext border border-gray-200 dark:border-dark-border'}`}
+  const Sidebar = () => (
+    <aside className="hidden lg:block w-64 flex-shrink-0 pr-6">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-dark-text mb-4">Categories</h2>
+        <div className="space-y-2">
+            <button 
+                onClick={() => setSelectedCategory('all')}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${selectedCategory === 'all' ? 'bg-tumbi-100 text-tumbi-700 dark:bg-tumbi-900/30 dark:text-tumbi-300' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}
             >
-              {filter === 'all' ? 'All Ads' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                All Categories
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Listings */}
-      {isListingsLoading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            {[1,2,3,4,5,6].map(i => (
-                <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-lg aspect-square animate-pulse"></div>
+            {[...PRODUCT_CATEGORIES, ...SERVICE_CATEGORIES].map(cat => (
+                <button 
+                    key={cat.value}
+                    onClick={() => setSelectedCategory(prev => prev === cat.value ? 'all' : cat.value)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors ${selectedCategory === cat.value ? 'bg-tumbi-100 text-tumbi-700 dark:bg-tumbi-900/30 dark:text-tumbi-300' : 'text-gray-600 dark:text-dark-subtext hover:bg-gray-100 dark:hover:bg-dark-card'}`}
+                >
+                    <span>{cat.label}</span>
+                    <input 
+                        type="checkbox" 
+                        readOnly 
+                        checked={selectedCategory === cat.value} 
+                        className="w-4 h-4 rounded text-tumbi-600 focus:ring-tumbi-500 border-gray-300 pointer-events-none" 
+                    />
+                </button>
             ))}
         </div>
-      ) : filteredListings.length > 0 ? (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredListings.map(item => (
-            <ListingCard
-              key={item.id}
-              listing={item}
-              onClick={() => openListing(String(item.id))}
-            />
-          ))}
+    </aside>
+  );
+
+  const HomeContent = () => (
+    <div className="max-w-6xl mx-auto px-4 py-6 flex">
+      <Sidebar />
+      <main className="flex-1">
+        {/* Main Filter Tabs */}
+        <div className="mb-6">
+            <div className="flex space-x-2 overflow-x-auto no-scrollbar pb-2">
+            {['all', 'products', 'services', 'rentals'].map(filter => (
+                <button
+                key={filter}
+                onClick={() => setMainFilter(filter)}
+                className={`px-6 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${mainFilter === filter ? 'bg-tumbi-500 text-white shadow-md' : 'bg-white dark:bg-dark-card text-gray-700 dark:text-dark-subtext border border-gray-200 dark:border-dark-border'}`}
+                >
+                {filter === 'all' ? 'All Ads' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                </button>
+            ))}
+            </div>
         </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="bg-gray-100 dark:bg-dark-card p-6 rounded-full mb-4">
-            <SearchIcon className="w-8 h-8 text-gray-400 dark:text-dark-subtext" />
-          </div>
-          <p className="text-gray-600 dark:text-dark-text font-medium">No results found.</p>
-          <p className="text-gray-400 dark:text-dark-subtext text-sm mt-1">Try adjusting your filters or search query.</p>
-        </div>
-      )}
-    </main>
+
+        {/* Main Listings */}
+        {isListingsLoading ? (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {[1,2,3,4,5,6].map(i => (
+                    <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-lg aspect-square animate-pulse"></div>
+                ))}
+            </div>
+        ) : filteredListings.length > 0 ? (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            {filteredListings.map(item => (
+                <ListingCard
+                    key={item.id}
+                    listing={item}
+                    isSaved={savedListingIds.has(String(item.id))}
+                    onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }}
+                    onClick={() => openListing(String(item.id))}
+                />
+            ))}
+            </div>
+        ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="bg-gray-100 dark:bg-dark-card p-6 rounded-full mb-4">
+                <SearchIcon className="w-8 h-8 text-gray-400 dark:text-dark-subtext" />
+            </div>
+            <p className="text-gray-600 dark:text-dark-text font-medium">No results found.</p>
+            <p className="text-gray-400 dark:text-dark-subtext text-sm mt-1">Try adjusting your filters or search query.</p>
+            </div>
+        )}
+      </main>
+    </div>
   );
 
   if (isUserLoading) {
@@ -490,7 +524,7 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg`}>
+    <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24`}>
         {showAuth && (
             <AuthModal 
                 onClose={() => setShowAuth(false)} 

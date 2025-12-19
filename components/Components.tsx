@@ -2,9 +2,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
 import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, HeartIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon } from './Icons';
-import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, MEASUREMENT_UNITS } from '../constants';
+import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
 
 // --- Auth Modal ---
 export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onAuthSuccess: (data: { auth: boolean, token: string, user: User }) => void }) => {
@@ -47,8 +47,8 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-dark-card rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-gray-100 dark:hover:bg-dark-bg rounded-full">
-                    <ArrowLeftIcon className="w-5 h-5 text-gray-500 dark:text-dark-subtext rotate-180" />
+                <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-gray-100 dark:hover:bg-dark-bg rounded-full text-gray-500">
+                    <XIcon className="w-5 h-5" />
                 </button>
                 <div className="p-8">
                     <div className="text-center mb-6">
@@ -62,15 +62,18 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
                     <form onSubmit={handleSubmit} className="space-y-4">
                          {isRegister && (
                             <>
-                            <input required placeholder="Full Name" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-transparent dark:text-dark-text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                            <input required type="tel" placeholder="Phone Number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-transparent dark:text-dark-text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                            <input required placeholder="Full Name" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                            <input required type="tel" placeholder="Phone Number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
                             </>
                         )}
-                        <input required type="email" placeholder="Email Address" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-transparent dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                        <input required type="email" placeholder="Email Address" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                          {isRegister && (
-                            <input required placeholder="Location (e.g. Lagos)" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-transparent dark:text-dark-text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+                            <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
+                                <option value="">Select City</option>
+                                {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                            </select>
                         )}
-                        <input required type="password" placeholder="Password" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-transparent dark:text-dark-text" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                        <input required type="password" placeholder="Password" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
 
                         {error && <p className="text-red-500 text-xs text-center">{error}</p>}
 
@@ -96,25 +99,38 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
 interface ListingCardProps {
   listing: Listing;
   onClick: () => void;
+  isSaved?: boolean;
+  onToggleSave?: (e: React.MouseEvent) => void;
 }
 
-export const ListingCard: React.FC<ListingCardProps> = ({ listing, onClick }) => {
+export const ListingCard: React.FC<ListingCardProps> = ({ listing, onClick, isSaved = false, onToggleSave }) => {
     const firstImage = Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0 
         ? listing.imageUrls[0]
         : 'https://picsum.photos/400/300?random=42';
 
   return (
-    <div onClick={onClick} className="mb-3 break-inside-avoid cursor-pointer">
+    <div onClick={onClick} className="mb-3 break-inside-avoid cursor-pointer relative group">
       <div className="bg-white dark:bg-dark-card rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-        <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-dark-border">
+        <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-dark-border relative">
             <img src={firstImage} alt={listing.title} className="w-full h-full object-cover" />
+            {onToggleSave && (
+                <button 
+                    onClick={onToggleSave}
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-white/80 dark:bg-dark-card/80 hover:bg-white dark:hover:bg-dark-card transition-colors z-10 shadow-sm"
+                >
+                    <HeartIcon className={`w-4 h-4 ${isSaved ? 'text-red-500 fill-current' : 'text-gray-400 dark:text-dark-subtext'}`} filled={isSaved} />
+                </button>
+            )}
         </div>
         <div className="p-3">
           <h3 className="font-normal text-sm text-gray-800 dark:text-dark-text line-clamp-2">{listing.title}</h3>
           <p className="text-base font-bold text-tumbi-600 dark:text-tumbi-400 mt-1">ETB {listing.price.toLocaleString()}</p>
           <div className="text-xs text-gray-500 dark:text-dark-subtext mt-2 space-y-1">
-            <p className="truncate">{listing.location}</p>
-            <p>{listing.category}</p>
+            <div className="flex items-center">
+                <MapPinIcon className="w-3 h-3 mr-1" />
+                <span className="truncate">{listing.location}</span>
+            </div>
+            <p className="opacity-70">{listing.category}</p>
           </div>
         </div>
       </div>
@@ -161,7 +177,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
     title: '',
     price: '',
     unit: 'pcs',
-    location: '',
+    location: 'Addis Ababa',
     category: 'materials',
     listingType: 'product' as 'product' | 'service',
     description: '',
@@ -232,8 +248,8 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
       <div className="bg-white dark:bg-dark-bg rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-tumbi-500 text-white">
           <h2 className="text-lg font-bold">{initialData ? 'Edit Ad' : 'Post Ad'}</h2>
-          <button onClick={onClose} disabled={isSubmitting} className="p-1 hover:bg-white/20 rounded-full">
-            <span className="text-white text-sm">← Close</span>
+          <button onClick={onClose} disabled={isSubmitting} className="p-1 hover:bg-white/20 rounded-full text-white">
+            <XIcon className="w-5 h-5" />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
@@ -255,24 +271,30 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
                 </div>
                 <input type="file" multiple ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" disabled={isSubmitting || photoPreviews.length >= 5} />
             </div>
-             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
              <div className="grid grid-cols-2 gap-4">
-                <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Price" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
-                <select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>
+                <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Price" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
+                <select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>
                     {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}
                 </select>
              </div>
-            <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Location" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
+             
+             {/* Fixed Location Dropdown */}
+            <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
+                {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+            </select>
+
             <div className="grid grid-cols-2 gap-4">
-                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.listingType} onChange={e => setFormData({...formData, listingType: e.target.value as 'product' | 'service', category: ''})}>
+                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.listingType} onChange={e => setFormData({...formData, listingType: e.target.value as 'product' | 'service', category: ''})}>
                     <option value="product">Product</option>
                     <option value="service">Service</option>
                 </select>
-                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
-                    {currentCategories.map(cat => (<option key={cat.value} value={cat.value}>{cat.name}</option>))}
+                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
+                    <option value="">Select Category</option>
+                    {currentCategories.map(cat => (<option key={cat.value} value={cat.value}>{cat.label}</option>))}
                 </select>
             </div>
-            <textarea required rows={4} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+            <textarea required rows={4} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
 
             <div className="pt-2">
                 <button type="submit" disabled={isSubmitting} className={`w-full bg-tumbi-600 text-white font-bold py-4 rounded-lg flex justify-center items-center ${isSubmitting ? 'opacity-70' : 'hover:bg-tumbi-700'}`}>
@@ -300,7 +322,7 @@ export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listin
              ) : (
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     {savedListings.map(item => (
-                        <ListingCard key={item.id} listing={item} onClick={() => onOpen(String(item.id))} />
+                        <ListingCard key={item.id} listing={item} onClick={() => onOpen(String(item.id))} isSaved={true} onToggleSave={(e) => { e.stopPropagation(); onToggleSave(String(item.id)); }} />
                     ))}
                 </div>
              )}
@@ -378,7 +400,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
             <button onClick={toggleDarkMode} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border font-medium text-gray-700 dark:text-dark-text flex justify-between items-center group">
                 <div className="flex items-center">{isDarkMode ? <SunIcon className="w-5 h-5 mr-3" /> : <MoonIcon className="w-5 h-5 mr-3" />}Toggle Theme</div>
             </button>
-            <button onClick={onLogout} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border--dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600 flex justify-between items-center group">
+            <button onClick={onLogout} className="w-full text-left p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-500/10 font-medium text-red-600 flex justify-between items-center group">
                 <div className="flex items-center"><LogOutIcon className="w-5 h-5 mr-3" /> Log Out</div>
             </button>
         </div>
@@ -435,7 +457,7 @@ export const ChatConversationView = ({ session, user, onBack }: { session: ChatS
         <div className="fixed inset-0 z-50 bg-white dark:bg-dark-bg flex flex-col">
             <div className="p-4 border-b dark:border-dark-border flex items-center bg-white dark:bg-dark-card shadow-sm">
                  <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full">
-                    <span className="text-gray-900 dark:text-dark-text text-sm">← Back</span>
+                    <ChevronLeftIcon className="w-5 h-5 text-gray-900 dark:text-dark-text" />
                 </button>
                 <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-gray-200 dark:bg-dark-bg rounded-full flex items-center justify-center overflow-hidden">
@@ -480,7 +502,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
             <div className="sticky top-0 bg-white dark:bg-dark-card z-10 flex items-center p-4 border-b dark:border-dark-border justify-between">
                 <div className="flex items-center flex-1 truncate">
                     <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full">
-                        <span className="text-gray-900 dark:text-dark-text text-sm">← Back</span>
+                        <ChevronLeftIcon className="w-5 h-5 text-gray-900 dark:text-dark-text" />
                     </button>
                     <h2 className="font-bold text-lg truncate dark:text-dark-text">{listing.title}</h2>
                 </div>
@@ -502,7 +524,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
             </div>
             <div className="p-5 space-y-6 max-w-3xl mx-auto w-full">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text mb-2">{listing.title}</h1>
-                <div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">${listing.price.toLocaleString()}</div>
+                <div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">ETB {listing.price.toLocaleString()}</div>
                 <div className="border-t border-b dark:border-dark-border py-4 flex items-center space-x-4">
                     <div className="w-12 h-12 bg-gray-200 dark:bg-dark-card rounded-full flex items-center justify-center">
                         <UserIcon className="w-6 h-6 text-gray-500 dark:text-dark-subtext"/>
