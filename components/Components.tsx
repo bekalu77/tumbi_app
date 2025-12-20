@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, memo } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
-import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, HeartIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon } from './Icons';
+import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, SaveIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon, BookmarkIcon } from './Icons';
 import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
@@ -165,7 +165,7 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
                     onClick={onToggleSave}
                     className="absolute top-2 right-2 p-1.5 rounded-full bg-white/80 dark:bg-dark-card/80 hover:bg-white dark:hover:bg-dark-card transition-colors z-10 shadow-sm"
                 >
-                    <HeartIcon className={`w-4 h-4 ${isSaved ? 'text-red-500 fill-current' : 'text-gray-400 dark:text-dark-subtext'}`} filled={isSaved} />
+                    <BookmarkIcon className={`w-4 h-4 ${isSaved ? 'text-tumbi-600 fill-current' : 'text-gray-400 dark:text-dark-subtext'}`} filled={isSaved} />
                 </button>
             )}
             {showActions && (
@@ -432,7 +432,7 @@ export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listin
              <h2 className="text-2xl font-bold mb-4 dark:text-dark-text">Saved Items</h2>
              {savedListings.length === 0 ? (
                  <div className="text-center py-20 text-gray-500 dark:text-dark-subtext">
-                     <HeartIcon className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                     <SaveIcon className="w-12 h-12 mx-auto mb-2 opacity-20" />
                      <p>You haven't saved any items yet.</p>
                  </div>
              ) : (
@@ -694,7 +694,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                     <h2 className="font-bold text-lg truncate dark:text-dark-text">{listing.title}</h2>
                 </div>
                 <button onClick={() => onToggleSave(String(listing.id))} className="p-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full text-gray-500 dark:text-dark-subtext">
-                     <HeartIcon className="w-6 h-6" filled={isSaved} />
+                     <SaveIcon className="w-6 h-6" filled={isSaved} />
                 </button>
             </div>
             

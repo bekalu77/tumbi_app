@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
 import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal } from './components/Components';
-import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, HeartIcon } from './components/Icons';
+import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon } from './components/Icons';
 import ThemeToggle from './components/ThemeToggle';
 
 // Use a stable API URL fallback
@@ -53,12 +53,29 @@ export default function App() {
     }
   }
 
+  const fetchSavedListings = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+        const response = await fetch(`${API_URL}/api/saved`, {
+            headers: { 'x-access-token': token }
+        });
+        if (response.ok) {
+            const ids = await response.json();
+            setSavedListingIds(new Set(ids));
+        }
+    } catch (e) {
+        console.error("App: Failed to load saved listings:", e);
+    }
+  }
+
   useEffect(() => {
     const initApp = async () => {
       const token = localStorage.getItem('token');
       const userData = localStorage.getItem('user');
       if (token && userData) {
         setUser(JSON.parse(userData));
+        fetchSavedListings();
       }
       setIsUserLoading(false);
       fetchListings();
@@ -138,12 +155,14 @@ export default function App() {
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
     setShowAuth(false);
+    fetchSavedListings();
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+    setSavedListingIds(new Set());
     setViewState('home');
   };
 
@@ -216,13 +235,28 @@ export default function App() {
     } catch (error: any) { alert(`Error starting chat: ${error.message}`); }
   };
 
-  const toggleSave = (id: string) => {
-    if (!user) { setShowAuth(true); return; }
-    setSavedListingIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+  const toggleSave = async (id: string) => {
+    const token = localStorage.getItem('token');
+    if (!user || !token) { setShowAuth(true); return; }
+    
+    const isCurrentlySaved = savedListingIds.has(id);
+    const method = isCurrentlySaved ? 'DELETE' : 'POST';
+    
+    try {
+        const response = await fetch(`${API_URL}/api/saved/${id}`, {
+            method: method,
+            headers: { 'x-access-token': token }
+        });
+        if (response.ok) {
+            setSavedListingIds(prev => {
+                const next = new Set(prev);
+                if (isCurrentlySaved) next.delete(id); else next.add(id);
+                return next;
+            });
+        }
+    } catch (e) {
+        console.error("Failed to toggle save:", e);
+    }
   };
 
   const checkAuthAndGo = (targetView: ViewState) => {
@@ -338,7 +372,7 @@ export default function App() {
                     <HomeIcon className="w-6 h-6" />
                 </button>
                 <button onClick={() => checkAuthAndGo('saved')} className={`flex flex-col items-center justify-center w-full h-full ${viewState === 'saved' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>
-                    <HeartIcon className="w-6 h-6" filled={viewState === 'saved'} />
+                    <SaveIcon className="w-6 h-6" filled={viewState === 'saved'} />
                 </button>
                 <div className="relative -top-6">
                     <button onClick={() => { setEditingListing(undefined); checkAuthAndGo('sell'); }} className="w-14 h-14 bg-tumbi-500 hover:bg-tumbi-600 rounded-full flex items-center justify-center text-white shadow-lg border-4 border-white dark:border-dark-bg transition-transform hover:scale-105 active:scale-95">

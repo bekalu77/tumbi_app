@@ -129,6 +129,50 @@ app.put('/api/users/me', authenticateToken, async (req: any, res) => {
     }
 });
 
+// --- Saved Listings Endpoints ---
+
+app.get('/api/saved', authenticateToken, async (req: any, res) => {
+    const userId = req.user.id;
+    const client = await pool.connect();
+    try {
+        const result = await client.query('SELECT listing_id FROM saved_listings WHERE user_id = $1', [userId]);
+        res.json(result.rows.map(row => String(row.listing_id)));
+    } catch (error: any) {
+        res.status(500).json({ message: 'Failed to fetch saved listings', error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.post('/api/saved/:id', authenticateToken, async (req: any, res) => {
+    const userId = req.user.id;
+    const listingId = req.params.id;
+    const client = await pool.connect();
+    try {
+        await client.query('INSERT INTO saved_listings (user_id, listing_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, listingId]);
+        res.status(201).json({ message: 'Listing saved' });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Failed to save listing', error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.delete('/api/saved/:id', authenticateToken, async (req: any, res) => {
+    const userId = req.user.id;
+    const listingId = req.params.id;
+    const client = await pool.connect();
+    try {
+        await client.query('DELETE FROM saved_listings WHERE user_id = $1 AND listing_id = $2', [userId, listingId]);
+        res.json({ message: 'Listing unsaved' });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Failed to unsave listing', error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+
 // --- Image Upload Endpoint ---
 app.post('/api/upload', authenticateToken, async (req: any, res) => {
     if (!req.files || Object.keys(req.files).length === 0) {

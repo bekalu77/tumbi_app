@@ -1,8 +1,8 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.tumbi.app',
-  appName: 'Tumbi',
+  appId: 'com.tumbimarketplace.app',
+  appName: 'Tumbi Marketplace',
   webDir: 'dist',
   server: {
     androidScheme: 'https'

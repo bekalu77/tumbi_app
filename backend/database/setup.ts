@@ -1,17 +1,17 @@
 
 import { Pool } from 'pg';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const pool = new Pool({
-    connectionString: 'postgresql://neondb_owner:npg_PWh13GNCltza@ep-delicate-recipe-agnq91f0-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
+    connectionString: process.env.DATABASE_URL,
 });
 
 const setupDatabase = async () => {
     const client = await pool.connect();
     try {
-        console.log('Clearing existing tables...');
-        await client.query('DROP TABLE IF EXISTS messages, conversations, listings, users CASCADE');
+        console.log('Ensuring tables exist (without dropping data)...');
         
-        console.log('Creating tables...');
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -37,6 +37,14 @@ const setupDatabase = async () => {
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS saved_listings (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                listing_id INTEGER REFERENCES listings(id) ON DELETE CASCADE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, listing_id)
+            );
+
             CREATE TABLE IF NOT EXISTS conversations (
                 id SERIAL PRIMARY KEY,
                 listing_id INTEGER REFERENCES listings(id) ON DELETE CASCADE,
@@ -53,9 +61,9 @@ const setupDatabase = async () => {
                 timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
         `);
-        console.log('Database setup complete.');
+        console.log('Database verification complete. Existing data preserved.');
     } catch (error) {
-        console.error('Error setting up database:', error);
+        console.error('Error verifying database:', error);
     } finally {
         await client.release();
         await pool.end();
