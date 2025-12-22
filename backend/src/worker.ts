@@ -49,7 +49,6 @@ app.use('/api/*', async (c, next) => {
 // --- LISTINGS ROUTES ---
 
 app.get('/api/listings', async (c) => {
-    console.log("Fetching listings from database...");
     const pool = new Pool({ connectionString: c.env.DATABASE_URL });
     try {
         const result = await pool.query(`
@@ -67,8 +66,6 @@ app.get('/api/listings', async (c) => {
             ORDER BY l.created_at DESC
         `);
 
-        console.log(`Query successful. Found ${result.rows.length} listings.`);
-
         const listings = result.rows.map(item => ({
             ...item,
             price: parseFloat(item.price),
@@ -78,14 +75,10 @@ app.get('/api/listings', async (c) => {
 
         return c.json(listings);
     } catch (error: any) {
-        console.error("Database Query Error:", error.message);
         return c.json({ message: "Database error", error: error.message }, 500);
-    } finally {
-        await pool.end(); // Important for local development
-    }
+    } finally { await pool.end(); }
 });
 
-// ... (Keep existing POST/PUT/DELETE routes)
 app.post('/api/register', async (c) => {
     const body = await c.req.json();
     const { name, email, phone, password, location } = body;
@@ -179,6 +172,51 @@ app.delete('/api/listings/:id', async (c) => {
         return c.json({ message: 'Deleted successfully!' });
     } catch (error: any) {
         return c.json({ message: 'Error deleting listing.', error: error.message }, 500);
+    } finally { await pool.end(); }
+});
+
+// --- SAVED LISTINGS ROUTES ---
+app.get('/api/saved', async (c) => {
+    const user = c.get('jwtPayload');
+    const userId = (user as any).id;
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+    try {
+        const result = await pool.query('SELECT listing_id FROM saved_listings WHERE user_id = $1', [userId]);
+        return c.json(result.rows.map(row => String(row.listing_id)));
+    } catch (error: any) {
+        return c.json({ message: 'Error fetching saved listings', error: error.message }, 500);
+    } finally { await pool.end(); }
+});
+
+app.post('/api/saved/:id', async (c) => {
+    const user = c.get('jwtPayload');
+    const userId = (user as any).id;
+    const listingId = c.req.param('id');
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+    try {
+        await pool.query(
+            'INSERT INTO saved_listings (user_id, listing_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [userId, listingId]
+        );
+        return c.json({ message: 'Listing saved' });
+    } catch (error: any) {
+        return c.json({ message: 'Error saving listing', error: error.message }, 500);
+    } finally { await pool.end(); }
+});
+
+app.delete('/api/saved/:id', async (c) => {
+    const user = c.get('jwtPayload');
+    const userId = (user as any).id;
+    const listingId = c.req.param('id');
+    const pool = new Pool({ connectionString: c.env.DATABASE_URL });
+    try {
+        await pool.query(
+            'DELETE FROM saved_listings WHERE user_id = $1 AND listing_id = $2',
+            [userId, listingId]
+        );
+        return c.json({ message: 'Listing unsaved' });
+    } catch (error: any) {
+        return c.json({ message: 'Error unsaving listing', error: error.message }, 500);
     } finally { await pool.end(); }
 });
 

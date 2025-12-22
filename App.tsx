@@ -242,20 +242,38 @@ export default function App() {
     const isCurrentlySaved = savedListingIds.has(id);
     const method = isCurrentlySaved ? 'DELETE' : 'POST';
     
+    // Optimistic Update
+    setSavedListingIds(prev => {
+        const next = new Set(prev);
+        if (isCurrentlySaved) next.delete(id); else next.add(id);
+        return next;
+    });
+
     try {
         const response = await fetch(`${API_URL}/api/saved/${id}`, {
             method: method,
             headers: { 'x-access-token': token }
         });
-        if (response.ok) {
+        if (!response.ok) {
+            // Revert on error
             setSavedListingIds(prev => {
                 const next = new Set(prev);
-                if (isCurrentlySaved) next.delete(id); else next.add(id);
+                if (isCurrentlySaved) next.add(id); else next.delete(id);
                 return next;
             });
+            if (response.status === 401) {
+                handleLogout();
+                setShowAuth(true);
+            }
         }
     } catch (e) {
         console.error("Failed to toggle save:", e);
+        // Revert on network error
+        setSavedListingIds(prev => {
+            const next = new Set(prev);
+            if (isCurrentlySaved) next.add(id); else next.delete(id);
+            return next;
+        });
     }
   };
 
