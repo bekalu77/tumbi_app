@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, memo } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
 import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, SaveIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon, BookmarkIcon } from './Icons';
-import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
+import { CATEGORIES, SUB_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
 
@@ -89,7 +89,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
             <div className="bg-white dark:bg-dark-card rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
                 <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-gray-100 dark:hover:bg-dark-bg rounded-full text-gray-500">
                     <XIcon className="w-5 h-5" />
@@ -187,7 +187,7 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
                 <MapPinIcon className="w-3 h-3 mr-1" />
                 <span className="truncate">{listing.location}</span>
             </div>
-            <p className="opacity-70">{listing.category}</p>
+            <p className="opacity-70 truncate uppercase text-[9px] font-bold text-tumbi-500">{listing.category}</p>
           </div>
         </div>
       </div>
@@ -222,7 +222,7 @@ export const CategoryPill: React.FC<CategoryPillProps> = ({ category, isSelected
 );
 
 
-// --- Add/Edit Listing Form (Dark Mode Styles) ---
+// --- Add/Edit Listing Form (Updated Category Structure) ---
 interface AddListingProps {
   onClose: () => void;
   onSubmit: (listingData: any, photos: File[]) => void; 
@@ -236,8 +236,8 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
     price: '',
     unit: 'pcs',
     location: 'Addis Ababa',
-    category: 'materials',
-    listingType: 'product' as 'product' | 'service',
+    mainCategory: '',
+    subCategory: '',
     description: '',
   });
   
@@ -248,13 +248,22 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
 
   useEffect(() => {
     if (initialData) {
+        // Try to reverse map the initial data to main/sub categories
+        let foundMain = '';
+        for (const main in SUB_CATEGORIES) {
+            if (SUB_CATEGORIES[main].some(sub => sub.value === initialData.category)) {
+                foundMain = main;
+                break;
+            }
+        }
+
         setFormData({
             title: initialData.title,
             price: initialData.price.toString(),
             unit: initialData.unit,
             location: initialData.location,
-            category: initialData.category,
-            listingType: initialData.listingType as 'product' | 'service',
+            mainCategory: foundMain || (initialData.listingType === 'product' ? 'materials' : 'services'),
+            subCategory: initialData.category,
             description: initialData.description,
         });
         if (Array.isArray(initialData.imageUrls)) {
@@ -301,10 +310,27 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
         return;
     };
 
-    onSubmit({ ...formData, price: Number(formData.price) }, photos);
+    if (!formData.mainCategory || !formData.subCategory) {
+        alert("Please select both a category and sub-category.");
+        return;
+    }
+
+    // Map back to schema fields
+    const submissionData = {
+        title: formData.title,
+        price: Number(formData.price),
+        unit: formData.unit,
+        location: formData.location,
+        category: formData.subCategory, // Store sub-category in category_slug
+        listingType: formData.mainCategory === 'services' || formData.mainCategory === 'rentals' ? 'service' : 'product', // basic mapping
+        description: formData.description,
+    };
+
+    onSubmit(submissionData, photos);
   };
 
-  const currentCategories = formData.listingType === 'product' ? PRODUCT_CATEGORIES : SERVICE_CATEGORIES;
+  const mainCategories = CATEGORIES.filter(c => c.slug !== 'all');
+  const availableSubCategories = formData.mainCategory ? SUB_CATEGORIES[formData.mainCategory] || [] : [];
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -317,7 +343,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
         </div>
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
             <div>
-                 <label className="block text-sm font-medium text-gray-700 dark:text-dark-subtext mb-1">Photos ({photoPreviews.length}/5)</label>
+                 <label className="block text-sm font-medium text-gray-700 dark:text-dark-subtext mb-1 text-xs uppercase font-bold tracking-wider">Photos ({photoPreviews.length}/5)</label>
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     {photoPreviews.map((preview, index) => (
                         <div key={index} className="relative aspect-square border dark:border-dark-border rounded-lg overflow-hidden">
@@ -334,30 +360,49 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
                 </div>
                 <input type="file" multiple ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" disabled={isSubmitting || photoPreviews.length >= 5} />
             </div>
-             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Title" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="What are you selling/offering?" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+             
              <div className="grid grid-cols-2 gap-4">
-                <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Price" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
-                <select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>
-                    {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}
-                </select>
+                <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Main Category</label>
+                    <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" value={formData.mainCategory} onChange={e => setFormData({...formData, mainCategory: e.target.value, subCategory: ''})}>
+                        <option value="">Select Group</option>
+                        {mainCategories.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Sub-Category</label>
+                    <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm disabled:opacity-50" value={formData.subCategory} onChange={e => setFormData({...formData, subCategory: e.target.value})} disabled={!formData.mainCategory}>
+                        <option value="">Select Item</option>
+                        {availableSubCategories.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}
+                    </select>
+                </div>
+            </div>
+
+             <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Price (ETB)</label>
+                    <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder="Amount" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
+                </div>
+                <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Unit</label>
+                    <select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>
+                        {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}
+                    </select>
+                </div>
              </div>
              
-             {/* Fixed Location Dropdown */}
-            <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
-                {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
-            </select>
-
-            <div className="grid grid-cols-2 gap-4">
-                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.listingType} onChange={e => setFormData({...formData, listingType: e.target.value as 'product' | 'service', category: ''})}>
-                    <option value="product">Product</option>
-                    <option value="service">Service</option>
-                </select>
-                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
-                    <option value="">Select Category</option>
-                    {currentCategories.map(cat => (<option key={cat.value} value={cat.value}>{cat.label}</option>))}
+            <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Location</label>
+                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
+                    {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                 </select>
             </div>
-            <textarea required rows={4} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+
+            <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Description</label>
+                <textarea required rows={4} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder="Provide more details about your listing..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+            </div>
 
             <div className="pt-2">
                 <button type="submit" disabled={isSubmitting} className={`w-full bg-tumbi-600 text-white font-bold py-4 rounded-lg flex justify-center items-center ${isSubmitting ? 'opacity-70' : 'hover:bg-tumbi-700'}`}>
@@ -715,7 +760,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                             <div className="flex items-center justify-between">
                                 <span className="px-2 py-1 bg-tumbi-100 dark:bg-tumbi-900/30 text-tumbi-700 dark:text-tumbi-300 text-[10px] font-bold uppercase rounded tracking-wider">{listing.category}</span>
                                 <button onClick={() => onToggleSave(String(listing.id))} className={`p-2 rounded-full transition-colors ${isSaved ? 'bg-tumbi-50 text-tumbi-600' : 'hover:bg-gray-100 text-gray-400'}`}>
-                                    <SaveIcon className="w-6 h-6" filled={isSaved} />
+                                    <BookmarkIcon className="w-6 h-6" filled={isSaved} />
                                 </button>
                             </div>
                             <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text leading-tight">{listing.title}</h1>
