@@ -194,8 +194,10 @@ app.post('/api/saved/:id', async (c) => {
     const listingId = c.req.param('id');
     const pool = new Pool({ connectionString: c.env.DATABASE_URL });
     try {
+        // Clean up any existing copy first, then insert to ensure uniqueness without needing a PK constraint
+        await pool.query('DELETE FROM saved_listings WHERE user_id = $1 AND listing_id = $2', [userId, listingId]);
         await pool.query(
-            'INSERT INTO saved_listings (user_id, listing_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            'INSERT INTO saved_listings (user_id, listing_id) VALUES ($1, $2)',
             [userId, listingId]
         );
         return c.json({ message: 'Listing saved' });
