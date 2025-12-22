@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
+import { CATEGORIES, SUB_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
 import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal } from './components/Components';
 import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon } from './components/Icons';
@@ -21,8 +21,8 @@ export default function App() {
   const [isListingsLoading, setIsListingsLoading] = useState(true);
 
   // Filter UI State (Uncontrolled/Buffered)
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [mainFilter, setMainFilter] = useState('all');
+  const [selectedMainCategory, setSelectedMainCategory] = useState('all');
+  const [selectedSubCategory, setSelectedSubCategory] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [selectedCity, setSelectedCity] = useState('All Cities');
   const [sortBy, setSortBy] = useState('date-desc');
@@ -107,11 +107,11 @@ export default function App() {
   };
   
   const resetAllFilters = () => {
-    setSelectedCategory('all');
+    setSelectedMainCategory('all');
+    setSelectedSubCategory('all');
     setSelectedCity('All Cities');
     setSearchInput('');
     setSortBy('date-desc');
-    setMainFilter('all');
     setAppliedFilters({ searchQuery: '' });
     setViewState('home');
   };
@@ -124,19 +124,14 @@ export default function App() {
 
   const filteredListings = useMemo(() => {
     let filtered = listings.filter(item => {
-      let matchesMainFilter = true;
-      if (mainFilter === 'products') {
-        matchesMainFilter = item.listingType === 'product';
-      } else if (mainFilter === 'services') {
-        matchesMainFilter = item.listingType === 'service';
-      }
-
-      const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+      const matchesMain = selectedMainCategory === 'all' || item.listingType === selectedMainCategory || (selectedMainCategory === 'materials' && item.listingType === 'product') || (selectedMainCategory === 'services' && item.listingType === 'service') || (selectedMainCategory === 'rentals' && item.listingType === 'service' && item.category === 'rental');
+      
+      const matchesSub = selectedSubCategory === 'all' || item.category === selectedSubCategory;
       const matchesCity = selectedCity === 'All Cities' || item.location === selectedCity;
       const matchesSearch = item.title.toLowerCase().includes(appliedFilters.searchQuery.toLowerCase()) || 
                            (item.description && item.description.toLowerCase().includes(appliedFilters.searchQuery.toLowerCase()));
       
-      return matchesMainFilter && matchesCategory && matchesCity && matchesSearch;
+      return matchesMain && matchesSub && matchesCity && matchesSearch;
     });
 
     filtered.sort((a, b) => {
@@ -148,7 +143,7 @@ export default function App() {
     });
 
     return filtered;
-  }, [listings, mainFilter, selectedCategory, selectedCity, appliedFilters, sortBy]);
+  }, [listings, selectedMainCategory, selectedSubCategory, selectedCity, appliedFilters, sortBy]);
 
   const handleAuthSuccess = (data: { auth: boolean, token: string, user: User }) => {
     localStorage.setItem('token', data.token);
@@ -283,13 +278,6 @@ export default function App() {
     if (user) setViewState(targetView); else setShowAuth(true);
   };
 
-  // Compute categories based on main filter
-  const categoriesToShow = useMemo(() => {
-    if (mainFilter === 'products') return PRODUCT_CATEGORIES;
-    if (mainFilter === 'services') return SERVICE_CATEGORIES;
-    return [...PRODUCT_CATEGORIES, ...SERVICE_CATEGORIES];
-  }, [mainFilter]);
-
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`}>
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} />}
@@ -328,15 +316,15 @@ export default function App() {
                             <option>All Cities</option>
                             {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={mainFilter} onChange={e => { setMainFilter(e.target.value); setSelectedCategory('all'); }}>
-                            <option value="all">Product or Service</option>
-                            <option value="products">Products</option>
-                            <option value="services">Services</option>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>
+                            {CATEGORIES.map(cat => (
+                                <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+                            ))}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
-                            <option value="all">All Categories</option>
-                            {categoriesToShow.map(cat => (
-                                <option key={cat.value} value={cat.value}>{cat.label}</option>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}>
+                            <option value="all">Sub-Categories</option>
+                            {selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (
+                                <option key={sub.value} value={sub.value}>{sub.label}</option>
                             ))}
                         </select>
                     </div>
