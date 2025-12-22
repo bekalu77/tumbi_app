@@ -685,64 +685,83 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
     const goToPrev = () => setCurrentImageIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length);
 
     return (
-        <div className="fixed inset-0 z-40 bg-white dark:bg-dark-bg flex flex-col overflow-y-auto pb-24">
-            <div className="sticky top-0 bg-white dark:bg-dark-card z-10 flex items-center p-4 border-b dark:border-dark-border justify-between">
-                <div className="flex items-center flex-1 truncate">
-                    <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full">
-                        <ChevronLeftIcon className="w-5 h-5 text-gray-900 dark:text-dark-text" />
-                    </button>
-                    <h2 className="font-bold text-lg truncate dark:text-dark-text">{listing.title}</h2>
-                </div>
-                <button onClick={() => onToggleSave(String(listing.id))} className="p-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full text-gray-500 dark:text-dark-subtext">
-                     <SaveIcon className="w-6 h-6" filled={isSaved} />
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-dark-bg w-full max-w-4xl max-h-[95vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative">
+                {/* Close Button */}
+                <button onClick={onBack} className="absolute top-4 right-4 z-50 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors backdrop-blur-sm">
+                    <XIcon className="w-5 h-5" />
                 </button>
-            </div>
-            
-            {!isOwner && (
-                <div className="p-4 bg-gray-50 dark:bg-dark-bg flex space-x-3 border-b dark:border-dark-border">
-                    <a href={`tel:${listing.sellerPhone || ''}`} className="flex-1 bg-white dark:bg-dark-card border-2 border-tumbi-500 text-tumbi-600 hover:bg-tumbi-50 font-bold py-3 rounded-xl flex items-center justify-center transition-colors">
-                        <PhoneIcon className="w-5 h-5 mr-2" /> Call
-                    </a>
-                    <button onClick={() => onChat(listing)} className="flex-1 bg-tumbi-600 hover:bg-tumbi-700 text-white font-bold py-3 rounded-xl flex items-center justify-center transition-transform active:scale-95 shadow-lg shadow-tumbi-200 dark:shadow-none">
-                        <MessageCircleIcon className="w-5 h-5 mr-2" /> Chat
-                    </button>
-                </div>
-            )}
 
-            <div className="w-full aspect-video bg-black relative">
-                {imageUrls.length > 0 && imageUrls[0] && <img src={imageUrls[currentImageIndex]} alt={listing.title} className="w-full h-full object-contain" />}
-                {imageUrls.length > 1 && (
-                    <>
-                        <button onClick={goToPrev} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60"><ChevronLeftIcon className="w-6 h-6" /></button>
-                        <button onClick={goToNext} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60"><ChevronRightIcon className="w-6 h-6" /></button>
-                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-2">
-                            {imageUrls.map((_, index) => (<div key={index} className={`w-2 h-2 rounded-full ${currentImageIndex === index ? 'bg-white' : 'bg-white/50'}`}></div>))}
+                {/* Left: Image Gallery */}
+                <div className="w-full md:w-3/5 aspect-square md:aspect-auto bg-black relative group">
+                    {imageUrls.length > 0 && (
+                        <img src={imageUrls[currentImageIndex]} alt={listing.title} className="w-full h-full object-contain" />
+                    )}
+                    {imageUrls.length > 1 && (
+                        <>
+                            <button onClick={goToPrev} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full backdrop-blur-sm transition-opacity opacity-0 group-hover:opacity-100"><ChevronLeftIcon className="w-6 h-6" /></button>
+                            <button onClick={goToNext} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full backdrop-blur-sm transition-opacity opacity-0 group-hover:opacity-100"><ChevronRightIcon className="w-6 h-6" /></button>
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
+                                {imageUrls.map((_, index) => (<div key={index} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === index ? 'bg-white w-4' : 'bg-white/50'}`}></div>))}
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Right: Info Section */}
+                <div className="w-full md:w-2/5 flex flex-col bg-white dark:bg-dark-card overflow-hidden">
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="px-2 py-1 bg-tumbi-100 dark:bg-tumbi-900/30 text-tumbi-700 dark:text-tumbi-300 text-[10px] font-bold uppercase rounded tracking-wider">{listing.category}</span>
+                                <button onClick={() => onToggleSave(String(listing.id))} className={`p-2 rounded-full transition-colors ${isSaved ? 'bg-tumbi-50 text-tumbi-600' : 'hover:bg-gray-100 text-gray-400'}`}>
+                                    <SaveIcon className="w-6 h-6" filled={isSaved} />
+                                </button>
+                            </div>
+                            <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text leading-tight">{listing.title}</h1>
+                            <div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">ETB {listing.price.toLocaleString()}</div>
                         </div>
-                    </>
-                )}
-            </div>
-            <div className="p-5 space-y-6 max-w-3xl mx-auto w-full">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text mb-2">{listing.title}</h1>
-                <div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">ETB {listing.price.toLocaleString()}</div>
-                <div className="border-t border-b dark:border-dark-border py-4 flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gray-200 dark:bg-dark-card rounded-full flex items-center justify-center">
-                        <UserIcon className="w-6 h-6 text-gray-500 dark:text-dark-subtext"/>
+
+                        <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-dark-bg rounded-xl">
+                            <MapPinIcon className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm font-medium text-gray-600 dark:text-dark-subtext">{listing.location}</span>
+                        </div>
+
+                        <div className="space-y-3">
+                            <h3 className="font-bold text-sm uppercase text-gray-400 tracking-widest">Description</h3>
+                            <p className="text-gray-700 dark:text-dark-subtext text-sm leading-relaxed whitespace-pre-line">{listing.description}</p>
+                        </div>
+
+                        <div className="pt-6 border-t dark:border-dark-border">
+                            <div className="flex items-center space-x-4">
+                                <div className="w-12 h-12 bg-tumbi-100 dark:bg-tumbi-900/30 rounded-full flex items-center justify-center">
+                                    <UserIcon className="w-6 h-6 text-tumbi-600 dark:text-tumbi-300"/>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="font-bold text-gray-900 dark:text-dark-text">{listing.sellerName}</p>
+                                    <p className="text-xs text-gray-500">Verified Seller</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <p className="font-bold text-gray-900 dark:text-dark-text">{listing.sellerName}</p>
+
+                    {/* Action Buttons */}
+                    <div className="p-6 bg-gray-50 dark:bg-dark-bg/50 border-t dark:border-dark-border">
+                        {isOwner ? (
+                             <button onClick={() => onEdit(listing)} className="w-full bg-gray-900 dark:bg-tumbi-600 hover:bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center transition-transform active:scale-[0.98] shadow-lg"><SettingsIcon className="w-5 h-5 mr-2" />Edit My Listing</button>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                                <a href={`tel:${listing.sellerPhone || ''}`} className="flex items-center justify-center bg-white dark:bg-dark-card border-2 border-tumbi-500 text-tumbi-600 font-bold py-3 rounded-xl hover:bg-tumbi-50 transition-colors">
+                                    <PhoneIcon className="w-5 h-5 mr-2" /> Call
+                                </a>
+                                <button onClick={() => onChat(listing)} className="flex items-center justify-center bg-tumbi-600 hover:bg-tumbi-700 text-white font-bold py-3 rounded-xl transition-transform active:scale-95 shadow-lg shadow-tumbi-200 dark:shadow-none">
+                                    <MessageCircleIcon className="w-5 h-5 mr-2" /> Chat
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
-                <div>
-                    <h3 className="font-bold text-lg mb-2 dark:text-dark-text">Description</h3>
-                    <p className="text-gray-700 dark:text-dark-subtext leading-relaxed whitespace-pre-line pb-20">{listing.description}</p>
-                </div>
             </div>
-            
-            {isOwner && (
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-dark-card border-t dark:border-dark-border flex items-center justify-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20">
-                     <button onClick={() => onEdit(listing)} className="w-full max-w-md bg-gray-900 dark:bg-tumbi-700 hover:bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center"><SettingsIcon className="w-5 h-5 mr-2" />Edit Listing</button>
-                </div>
-            )}
         </div>
     );
 }
