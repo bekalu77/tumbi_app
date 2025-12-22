@@ -7,8 +7,7 @@
     "build": "tsc",
     "start": "npm run dev",
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev --ip 127.0.0.1 --port 8787",
-    "db:setup": "node --loader ts-node/esm database/setup.ts"
+    "dev": "wrangler dev --ip 127.0.0.1 --port 8787"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.1",

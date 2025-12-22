@@ -472,9 +472,9 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
     if (loading) return <div className="p-10 text-center text-gray-400 dark:text-dark-subtext">Loading messages...</div>;
 
     return (
-        <div className="max-w-6xl mx-auto h-[calc(100vh-140px)] bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-dark-border overflow-hidden flex flex-col md:flex-row my-4 mx-4">
+        <div className="max-w-7xl mx-auto h-[calc(100vh-240px)] bg-white dark:bg-dark-card rounded-xl shadow-md border border-gray-100 dark:border-dark-border overflow-hidden flex flex-col md:flex-row my-2 md:my-4 mx-2 md:mx-4">
             {/* Left Panel: Conversation List */}
-            <div className={`w-full md:w-80 border-r border-gray-100 dark:border-dark-border flex-shrink-0 flex flex-col ${selectedSession ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`w-full md:w-96 border-r border-gray-100 dark:border-dark-border flex-shrink-0 flex flex-col ${selectedSession ? 'hidden md:flex' : 'flex'}`}>
                 <div className="p-4 border-b border-gray-100 dark:border-dark-border bg-gray-50 dark:bg-dark-bg">
                     <h2 className="text-lg font-bold dark:text-dark-text">Chats</h2>
                 </div>

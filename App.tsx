@@ -265,6 +265,8 @@ export default function App() {
                 handleLogout();
                 setShowAuth(true);
             }
+            const data = await response.json();
+            console.error("Failed to toggle save:", data.message);
         }
     } catch (e) {
         console.error("Failed to toggle save:", e);
