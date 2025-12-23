@@ -45,6 +45,7 @@ export default function App() {
       const response = await fetch(`${API_URL}/api/listings`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
+      console.log("App: Fetched listings from API:", data);
       setListings(data);
     } catch (e) {
       console.error("App: Failed to load listings:", e);
@@ -123,8 +124,14 @@ export default function App() {
   };
 
   const filteredListings = useMemo(() => {
+    console.log("App: Filtering listings. Total:", listings.length, "MainCat:", selectedMainCategory);
     let filtered = listings.filter(item => {
-      const matchesMain = selectedMainCategory === 'all' || item.listingType === selectedMainCategory || (selectedMainCategory === 'materials' && item.listingType === 'product') || (selectedMainCategory === 'services' && item.listingType === 'service') || (selectedMainCategory === 'rentals' && item.listingType === 'service' && item.category === 'rental');
+      // Relaxed matching for debugging
+      const matchesMain = selectedMainCategory === 'all' || 
+                         item.listingType === selectedMainCategory || 
+                         (selectedMainCategory === 'materials' && item.listingType === 'product') || 
+                         (selectedMainCategory === 'services' && item.listingType === 'service') || 
+                         (selectedMainCategory === 'rentals' && item.listingType === 'service' && item.category === 'rental');
       
       const matchesSub = selectedSubCategory === 'all' || item.category === selectedSubCategory;
       const matchesCity = selectedCity === 'All Cities' || item.location === selectedCity;
@@ -133,6 +140,7 @@ export default function App() {
       
       return matchesMain && matchesSub && matchesCity && matchesSearch;
     });
+    console.log("App: Filtered count:", filtered.length);
 
     filtered.sort((a, b) => {
       if (sortBy === 'date-desc') return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();

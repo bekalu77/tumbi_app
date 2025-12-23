@@ -14,10 +14,14 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 // --- MIDDLEWARE ---
 app.use('/*', cors({
-  origin: '*',
-  allowHeaders: ['Content-Type', 'x-access-token'],
+  origin: (origin) => origin, // Reflect the request origin
+  allowHeaders: ['Content-Type', 'x-access-token', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
 }));
+
+// Health check
+app.get('/health', (c) => c.text('OK'));
 
 app.use('/api/*', async (c, next) => {
     const publicPaths = ['/api/register', '/api/login', '/api/listings'];
