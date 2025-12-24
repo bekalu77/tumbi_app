@@ -4,7 +4,7 @@ import { Listing, Category, User, Message, ChatSession } from '../types';
 import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, SaveIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon, BookmarkIcon } from './Icons';
 import { CATEGORIES, SUB_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
+const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
 
 // Image optimization function
 const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<File> => {
@@ -474,7 +474,6 @@ export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClos
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        // Simulate loading then save
         onSave(formData);
         setIsLoading(false);
     };
@@ -520,6 +519,49 @@ export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClos
     );
 };
 
+// --- Vendor Profile View ---
+export const VendorProfileView = ({ vendorId, listings, onBack, onOpenListing }: { vendorId: string, listings: Listing[], onBack: () => void, onOpenListing: (id: string) => void }) => {
+    const vendorListings = listings.filter(l => l.sellerId === vendorId);
+    const vendorName = vendorListings[0]?.sellerName || 'Vendor';
+
+    return (
+        <div className="fixed inset-0 z-[60] bg-gray-50 dark:bg-dark-bg overflow-y-auto pb-24">
+            <header className="sticky top-0 z-30 bg-white dark:bg-dark-card border-b border-gray-200 dark:border-dark-border p-4 flex items-center shadow-sm">
+                <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full">
+                    <ChevronLeftIcon className="w-6 h-6 dark:text-dark-text" />
+                </button>
+                <h2 className="text-xl font-bold dark:text-dark-text truncate">Listings by {vendorName}</h2>
+            </header>
+
+            <div className="max-w-4xl mx-auto p-4">
+                <div className="bg-white dark:bg-dark-card rounded-xl p-6 mb-8 border border-gray-100 dark:border-dark-border flex items-center space-x-4 shadow-sm">
+                    <div className="w-16 h-16 bg-tumbi-100 dark:bg-tumbi-900/50 rounded-full flex items-center justify-center text-tumbi-700 dark:text-tumbi-300 font-bold text-xl">
+                        {vendorName.charAt(0)}
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-bold dark:text-dark-text">{vendorName}</h3>
+                        <p className="text-sm text-gray-500 dark:text-dark-subtext">Verified Vendor • {vendorListings.length} Active Ads</p>
+                    </div>
+                </div>
+
+                {vendorListings.length === 0 ? (
+                    <p className="text-center py-20 text-gray-500">This vendor has no other active listings.</p>
+                ) : (
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        {vendorListings.map(item => (
+                            <ListingCard 
+                                key={item.id} 
+                                listing={item} 
+                                onClick={() => onOpenListing(String(item.id))} 
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 // --- Other Views ---
 export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listings: Listing[], onOpen: (id: string) => void, savedIds: Set<string>, onToggleSave: (id: string) => void }) => {
     const savedListings = listings.filter(l => savedIds.has(String(l.id)));
@@ -556,7 +598,6 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message);
                 setSessions(data);
-                // Calculate total unread messages
                 const totalUnread = data.reduce((sum: number, session: ChatSession) => sum + (session.unreadCount || 0), 0);
                 onUnreadCountChange?.(totalUnread);
             } catch (error) {
@@ -572,7 +613,6 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
 
     return (
         <div className="max-w-7xl mx-auto h-[calc(100vh-240px)] bg-white dark:bg-dark-card rounded-xl shadow-md border border-gray-100 dark:border-dark-border overflow-hidden flex flex-col md:flex-row my-2 md:my-4 mx-2 md:mx-4">
-            {/* Left Panel: Conversation List */}
             <div className={`w-full md:w-96 border-r border-gray-100 dark:border-dark-border flex-shrink-0 flex flex-col ${selectedSession ? 'hidden md:flex' : 'flex'}`}>
                 <div className="p-4 border-b border-gray-100 dark:border-dark-border bg-gray-50 dark:bg-dark-bg">
                     <h2 className="text-lg font-bold dark:text-dark-text">Chats</h2>
@@ -585,7 +625,6 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
                             <div 
                                 key={session.conversationId} 
                                 onClick={async () => { 
-                                    // Mark as read
                                     const token = localStorage.getItem('token');
                                     if (token) {
                                         try {
@@ -593,14 +632,12 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
                                                 method: 'POST',
                                                 headers: { 'x-access-token': token } 
                                             });
-                                            // Update local state to reflect read status
                                             setSessions(prev => {
                                                 const updated = prev.map(s => 
                                                     s.conversationId === session.conversationId 
                                                         ? { ...s, unreadCount: 0 } 
                                                         : s
                                                 );
-                                                // Recalculate total unread
                                                 const totalUnread = updated.reduce((sum: number, s: ChatSession) => sum + (s.unreadCount || 0), 0);
                                                 onUnreadCountChange?.(totalUnread);
                                                 return updated;
@@ -635,7 +672,6 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
                 </div>
             </div>
 
-            {/* Right Panel: Active Chat (Gmail-like layout) */}
             <div className={`flex-1 flex flex-col ${!selectedSession ? 'hidden md:flex items-center justify-center bg-gray-50 dark:bg-dark-bg' : 'flex bg-white dark:bg-dark-card'}`}>
                 {selectedSession ? (
                     <ChatConversationView session={selectedSession} user={user} onBack={() => setSelectedSession(null)} embedded={true} />
@@ -806,7 +842,7 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
     );
 };
 
-export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdit, onChat }: { listing: Listing; onBack: () => void; isSaved: boolean; onToggleSave: (id: string) => void; user: User | null; onEdit: (listing: Listing) => void; onChat: (listing: Listing) => void; }) => {
+export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdit, onChat, onOpenVendor }: { listing: Listing; onBack: () => void; isSaved: boolean; onToggleSave: (id: string) => void; user: User | null; onEdit: (listing: Listing) => void; onChat: (listing: Listing) => void; onOpenVendor?: (id: string) => void; }) => {
     const isOwner = user && String(user.id) === listing.sellerId;
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const imageUrls = Array.isArray(listing.imageUrls) ? listing.imageUrls : [];
@@ -817,12 +853,10 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
     return (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
             <div className="bg-white dark:bg-dark-bg w-full max-w-4xl max-h-[95vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative">
-                {/* Close Button */}
                 <button onClick={onBack} className="absolute top-4 right-4 z-50 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors backdrop-blur-sm">
                     <XIcon className="w-5 h-5" />
                 </button>
 
-                {/* Left: Image Gallery */}
                 <div className="w-full md:w-3/5 aspect-square md:aspect-auto bg-black relative group">
                     {imageUrls.length > 0 && (
                         <img src={imageUrls[currentImageIndex]} alt={listing.title} className="w-full h-full object-contain" />
@@ -838,7 +872,6 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                     )}
                 </div>
 
-                {/* Right: Info Section */}
                 <div className="w-full md:w-2/5 flex flex-col bg-white dark:bg-dark-card overflow-hidden">
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                         <div className="space-y-2">
@@ -862,20 +895,19 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                             <p className="text-gray-700 dark:text-dark-subtext text-sm leading-relaxed whitespace-pre-line">{listing.description}</p>
                         </div>
 
-                        <div className="pt-6 border-t dark:border-dark-border">
+                        <div className="pt-6 border-t dark:border-dark-border cursor-pointer hover:opacity-80 transition-opacity" onClick={() => listing.sellerId && onOpenVendor?.(listing.sellerId)}>
                             <div className="flex items-center space-x-4">
                                 <div className="w-12 h-12 bg-tumbi-100 dark:bg-tumbi-900/30 rounded-full flex items-center justify-center">
                                     <UserIcon className="w-6 h-6 text-tumbi-600 dark:text-tumbi-300"/>
                                 </div>
                                 <div className="flex-1">
-                                    <p className="font-bold text-gray-900 dark:text-dark-text">{listing.sellerName}</p>
-                                    <p className="text-xs text-gray-500">Verified Seller</p>
+                                    <p className="font-bold text-gray-900 dark:text-dark-text group-hover:text-tumbi-600">{listing.sellerName}</p>
+                                    <p className="text-xs text-tumbi-600 font-medium flex items-center">View Store <ChevronRightIcon className="w-3 h-3 ml-1" /></p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Action Buttons */}
                     <div className="p-6 bg-gray-50 dark:bg-dark-bg/50 border-t dark:border-dark-border">
                         {isOwner ? (
                              <button onClick={() => onEdit(listing)} className="w-full bg-gray-900 dark:bg-tumbi-600 hover:bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center transition-transform active:scale-[0.98] shadow-lg"><SettingsIcon className="w-5 h-5 mr-2" />Edit My Listing</button>

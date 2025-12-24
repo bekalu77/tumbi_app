@@ -2,12 +2,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CATEGORIES, SUB_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
-import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal } from './components/Components';
+import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal, VendorProfileView } from './components/Components';
 import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon } from './components/Icons';
 import ThemeToggle from './components/ThemeToggle';
 
-// Use a stable API URL fallback
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
+// Use the LIVE Cloudflare Worker URL as the primary endpoint for the app
+const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
 console.log('Using API_URL:', API_URL);
 
 export default function App() {
@@ -35,6 +35,7 @@ export default function App() {
 
   const [viewState, setViewState] = useState<ViewState>('home');
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   const [editingListing, setEditingListing] = useState<Listing | undefined>(undefined);
   const [savedListingIds, setSavedListingIds] = useState<Set<string>>(new Set());
 
@@ -44,10 +45,10 @@ export default function App() {
 
   const fetchListings = async () => {
     try {
+      console.log(`Fetching from: ${API_URL}/api/listings`);
       const response = await fetch(`${API_URL}/api/listings`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      console.log("App: Fetched listings from API:", data);
       setListings(data);
     } catch (e) {
       console.error("App: Failed to load listings:", e);
@@ -94,9 +95,11 @@ export default function App() {
       const token = localStorage.getItem('token');
       const userData = localStorage.getItem('user');
       if (token && userData) {
-        setUser(JSON.parse(userData));
-        fetchSavedListings();
-        fetchUnreadCount();
+        try {
+            setUser(JSON.parse(userData));
+        } catch (e) {
+            localStorage.removeItem('user');
+        }
       }
       setIsUserLoading(false);
       fetchListings();
@@ -115,6 +118,7 @@ export default function App() {
 
   useEffect(() => {
     if (user) {
+      fetchSavedListings();
       fetchUnreadCount();
     }
   }, [user]);
@@ -150,9 +154,7 @@ export default function App() {
   };
 
   const filteredListings = useMemo(() => {
-    console.log("App: Filtering listings. Total:", listings.length, "MainCat:", selectedMainCategory);
     let filtered = listings.filter(item => {
-      // Relaxed matching for debugging
       const matchesMain = selectedMainCategory === 'all' || 
                          item.listingType === selectedMainCategory || 
                          (selectedMainCategory === 'materials' && item.listingType === 'product') || 
@@ -166,7 +168,6 @@ export default function App() {
       
       return matchesMain && matchesSub && matchesCity && matchesSearch;
     });
-    console.log("App: Filtered count:", filtered.length);
 
     filtered.sort((a, b) => {
       if (sortBy === 'date-desc') return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
@@ -276,7 +277,6 @@ export default function App() {
     const isCurrentlySaved = savedListingIds.has(id);
     const method = isCurrentlySaved ? 'DELETE' : 'POST';
     
-    // Optimistic Update
     setSavedListingIds(prev => {
         const next = new Set(prev);
         if (isCurrentlySaved) next.delete(id); else next.add(id);
@@ -289,7 +289,6 @@ export default function App() {
             headers: { 'x-access-token': token }
         });
         if (!response.ok) {
-            // Revert on error
             setSavedListingIds(prev => {
                 const next = new Set(prev);
                 if (isCurrentlySaved) next.add(id); else next.delete(id);
@@ -299,12 +298,8 @@ export default function App() {
                 handleLogout();
                 setShowAuth(true);
             }
-            const data = await response.json();
-            console.error("Failed to toggle save:", data.message);
         }
     } catch (e) {
-        console.error("Failed to toggle save:", e);
-        // Revert on network error
         setSavedListingIds(prev => {
             const next = new Set(prev);
             if (isCurrentlySaved) next.add(id); else next.delete(id);
@@ -322,13 +317,13 @@ export default function App() {
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} />}
         {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleUpdateProfile} />}
         {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} />}
-        {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === selectedListingId)!} onBack={() => setViewState('home')} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={startEditListing} onChat={openChat} />}
+        {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === selectedListingId)!} onBack={() => setViewState('home')} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={startEditListing} onChat={openChat} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} />}
+        {viewState === 'vendor-profile' && selectedVendorId && <VendorProfileView vendorId={selectedVendorId} listings={listings} onBack={() => setViewState('details')} onOpenListing={openListing} />}
         {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isListingsLoading} />}
         
         {/* Header Section */}
         <header className="sticky top-0 z-30 bg-tumbi-500 dark:bg-dark-card shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-3">
-                {/* Row 1: Logo and Toggle */}
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={resetAllFilters}>
                         <h1 className="text-xl font-bold tracking-tight uppercase">TUMBI marketplace</h1>
@@ -338,7 +333,6 @@ export default function App() {
                     </div>
                 </div>
                 
-                {/* Row 2: Search */}
                 <div className="mb-3">
                     <div className="relative w-full">
                         <input type="text" placeholder="I am looking for..." className="w-full h-10 pl-4 pr-10 rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder-gray-500 dark:placeholder-dark-subtext outline-none focus:ring-2 focus:ring-tumbi-700 shadow-sm text-sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()} />
@@ -348,7 +342,6 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* Row 3: Filters */}
                 {viewState === 'home' && (
                     <div className="grid grid-cols-3 gap-2">
                         <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}>
@@ -371,7 +364,6 @@ export default function App() {
             </div>
         </header>
 
-        {/* Content Section */}
         {viewState === 'home' && (
             <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row">
                 <main className="flex-1">
@@ -412,7 +404,6 @@ export default function App() {
         {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} onUnreadCountChange={setTotalUnreadMessages} />}
         {viewState === 'profile' && user ? <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={startEditListing} onDeleteListing={(id) => { if(confirm('Delete this listing?')) fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => fetchListings())}} onEditProfile={() => setShowEditProfile(true)} /> : viewState === 'profile' && !user ? <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} /> : null}
 
-        {/* Fixed Footer Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-card border-t border-gray-200 dark:border-dark-border z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
             <div className="flex justify-around items-center h-16 max-w-4xl mx-auto px-2">
                 <button onClick={resetAllFilters} className={`flex flex-col items-center justify-center w-full h-full ${viewState === 'home' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>

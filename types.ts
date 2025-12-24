@@ -54,6 +54,7 @@ export interface ChatSession {
   listingImage: string;
   lastMessage: string;
   lastMessageDate: Date;
+  unreadCount?: number;
 }
 
-export type ViewState = 'home' | 'sell' | 'edit' | 'details' | 'saved' | 'messages' | 'chat-conversation' | 'profile' | 'register';
+export type ViewState = 'home' | 'sell' | 'edit' | 'details' | 'saved' | 'messages' | 'chat-conversation' | 'profile' | 'register' | 'vendor-profile';

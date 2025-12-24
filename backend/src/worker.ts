@@ -17,10 +17,13 @@ type Variables = {
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // --- MIDDLEWARE ---
+// Explicitly allow common origins and methods for mobile and web
 app.use('/*', cors({
-  origin: (origin) => origin, // Reflect the request origin
-  allowHeaders: ['Content-Type', 'x-access-token', 'Authorization'],
+  origin: '*', 
+  allowHeaders: ['Content-Type', 'x-access-token', 'Authorization', 'X-Requested-With'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  exposeHeaders: ['Content-Length'],
+  maxAge: 600,
   credentials: true,
 }));
 
