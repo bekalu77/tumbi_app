@@ -3,7 +3,11 @@ name = "tumbi-backend"
 main = "src/worker.ts"
 compatibility_date = "2024-04-05"
 
-# Bind your R2 bucket. Secrets are managed separately.
+[vars]
+DATABASE_URL = "postgresql://neondb_owner:npg_PWh13GNCltza@ep-delicate-recipe-agnq91f0-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+JWT_SECRET = "2dbfe2202056ea02ed0bc6700557c4ae5315dda04c678d821296f42bfdb895cc"
+
+# Bind your R2 bucket
 [[r2_buckets]]
 binding = "R2_BUCKET"
 bucket_name = "tumbiapp"

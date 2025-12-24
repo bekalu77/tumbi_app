@@ -1,14 +1,13 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { CATEGORIES, SUB_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
 import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal, VendorProfileView } from './components/Components';
-import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon } from './components/Icons';
+import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon, RefreshCwIcon } from './components/Icons';
 import ThemeToggle from './components/ThemeToggle';
 
 // Use the LIVE Cloudflare Worker URL as the primary endpoint for the app
 const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
-console.log('Using API_URL:', API_URL);
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -20,6 +19,7 @@ export default function App() {
   // Data State
   const [listings, setListings] = useState<Listing[]>([]);
   const [isListingsLoading, setIsListingsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Filter UI State (Uncontrolled/Buffered)
   const [selectedMainCategory, setSelectedMainCategory] = useState('all');
@@ -43,9 +43,8 @@ export default function App() {
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [totalUnreadMessages, setTotalUnreadMessages] = useState(0);
 
-  const fetchListings = async () => {
+  const fetchListings = useCallback(async () => {
     try {
-      console.log(`Fetching from: ${API_URL}/api/listings`);
       const response = await fetch(`${API_URL}/api/listings`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
@@ -54,8 +53,14 @@ export default function App() {
       console.error("App: Failed to load listings:", e);
     } finally {
       setIsListingsLoading(false);
+      setIsRefreshing(false);
     }
-  }
+  }, []);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    fetchListings();
+  };
 
   const fetchSavedListings = async () => {
     const token = localStorage.getItem('token');
@@ -114,7 +119,7 @@ export default function App() {
       }
     };
     initApp();
-  }, []);
+  }, [fetchListings]);
 
   useEffect(() => {
     if (user) {
@@ -312,8 +317,50 @@ export default function App() {
     if (user) setViewState(targetView); else setShowAuth(true);
   };
 
+  // Pull to refresh detection logic
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [pullDistance, setPullDistance] = useState(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY === 0) {
+      setTouchStart(e.targetTouches[0].clientY);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStart !== null && window.scrollY === 0) {
+      const currentTouch = e.targetTouches[0].clientY;
+      const distance = currentTouch - touchStart;
+      if (distance > 0) {
+        setPullDistance(Math.min(distance, 80));
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (pullDistance > 60) {
+      handleRefresh();
+    }
+    setTouchStart(null);
+    setPullDistance(0);
+  };
+
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`}>
+    <div 
+      className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`}
+      onTouchStart={viewState === 'home' ? handleTouchStart : undefined}
+      onTouchMove={viewState === 'home' ? handleTouchMove : undefined}
+      onTouchEnd={viewState === 'home' ? handleTouchEnd : undefined}
+    >
+        {/* Refresh Indicator */}
+        {pullDistance > 0 && (
+          <div className="fixed top-0 left-0 w-full flex justify-center z-[100] transition-transform pointer-events-none" style={{ transform: `translateY(${pullDistance}px)` }}>
+            <div className="bg-white dark:bg-dark-card p-2 rounded-full shadow-lg border border-gray-100 dark:border-dark-border">
+              <RefreshCwIcon className={`w-6 h-6 text-tumbi-600 ${pullDistance > 60 ? 'animate-spin' : ''}`} />
+            </div>
+          </div>
+        )}
+
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} />}
         {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleUpdateProfile} />}
         {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} />}
@@ -328,7 +375,10 @@ export default function App() {
                     <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={resetAllFilters}>
                         <h1 className="text-xl font-bold tracking-tight uppercase">TUMBI marketplace</h1>
                     </div>
-                    <div className="flex items-center">
+                    <div className="flex items-center space-x-2">
+                        <button onClick={handleRefresh} className={`p-2 rounded-full text-white/80 hover:text-white transition-colors ${isRefreshing ? 'animate-spin' : ''}`}>
+                          <RefreshCwIcon className="w-5 h-5" />
+                        </button>
                         <ThemeToggle isDark={isDarkMode} toggle={toggleDarkMode} />
                     </div>
                 </div>
@@ -379,7 +429,7 @@ export default function App() {
                         </div>
                     </div>
 
-                    {isListingsLoading ? (
+                    {(isListingsLoading && !isRefreshing) ? (
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                             {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-2xl aspect-square animate-pulse"></div>)}
                         </div>
