@@ -17,7 +17,6 @@ type Variables = {
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // --- MIDDLEWARE ---
-// Explicitly allow common origins and methods for mobile and web
 app.use('/*', cors({
   origin: '*', 
   allowHeaders: ['Content-Type', 'x-access-token', 'Authorization', 'X-Requested-With'],
@@ -53,7 +52,7 @@ app.use('/api/*', async (c, next) => {
     try {
         const decoded = await verify(authHeader, c.env.JWT_SECRET);
         const sql = neon(c.env.DATABASE_URL);
-        const users = await sql`SELECT id, name, email, location FROM users WHERE id = ${decoded.id}`;
+        const users = await sql`SELECT id, name, email, location FROM users WHERE id = ${parseInt(decoded.id as string)}`;
         if (!users.length) return c.json({ message: 'User not found' }, 401);
         c.set('user', { ...users[0], id: String(users[0].id) });
         return await next();
@@ -72,7 +71,7 @@ app.post('/api/register', async (c) => {
         
         const hashedPassword = await bcrypt.hash(password, 10);
         const result = await sql`INSERT INTO users (name, email, phone, password, location) VALUES (${name}, ${email}, ${phone}, ${hashedPassword}, ${location}) RETURNING id`;
-        const token = await sign({ id: result[0].id }, c.env.JWT_SECRET);
+        const token = await sign({ id: String(result[0].id) }, c.env.JWT_SECRET);
         return c.json({ auth: true, token, user: { id: String(result[0].id), name, email, location } });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
@@ -85,7 +84,7 @@ app.post('/api/login', async (c) => {
         if (!rows.length || !(await bcrypt.compare(password, rows[0].password))) {
             return c.json({ message: 'Invalid credentials' }, 401);
         }
-        const token = await sign({ id: rows[0].id }, c.env.JWT_SECRET);
+        const token = await sign({ id: String(rows[0].id) }, c.env.JWT_SECRET);
         const { password: _, ...user } = rows[0];
         return c.json({ auth: true, token, user: { ...user, id: String(user.id) } });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
@@ -93,57 +92,91 @@ app.post('/api/login', async (c) => {
 
 // --- LISTINGS ---
 app.get('/api/listings', async (c) => {
-    console.log("Fetching listings from Neon...");
     const sql = neon(c.env.DATABASE_URL);
+    const limit = parseInt(c.req.query('limit') || '20');
+    const offset = parseInt(c.req.query('offset') || '0');
+    const category = c.req.query('category');
+    const city = c.req.query('city');
+    const search = c.req.query('search');
+    const sortBy = c.req.query('sortBy') || 'date-desc';
+
     try {
-        const rows = await sql`
+        let query = `
             SELECT l.*, u.name as "sellerName", u.phone as "sellerPhone" 
             FROM listings l 
             LEFT JOIN users u ON l.user_id = u.id 
-            ORDER BY created_at DESC
+            WHERE 1=1
         `;
+        const params: any[] = [];
+
+        if (category && category !== 'all') {
+            params.push(category);
+            query += ` AND (l.main_category = $${params.length} OR l.sub_category = $${params.length})`;
+        }
+
+        if (city && city !== 'All Cities') {
+            params.push(city);
+            query += ` AND l.location = $${params.length}`;
+        }
+
+        if (search) {
+            params.push(`%${search.toLowerCase()}%`);
+            query += ` AND (LOWER(l.title) LIKE $${params.length} OR LOWER(l.description) LIKE $${params.length})`;
+        }
+
+        // Using c.id if created_at is missing, but typically listings has created_at
+        if (sortBy === 'price-asc') query += ` ORDER BY l.price ASC`;
+        else if (sortBy === 'price-desc') query += ` ORDER BY l.price DESC`;
+        else if (sortBy === 'date-asc') query += ` ORDER BY l.id ASC`; // Safe fallback
+        else query += ` ORDER BY l.id DESC`; // Safe fallback
+
+        params.push(limit);
+        query += ` LIMIT $${params.length}`;
+        params.push(offset);
+        query += ` OFFSET $${params.length}`;
+
+        const rows = await sql(query, params);
+
         return c.json(rows.map(r => ({
             ...r,
             id: String(r.id),
             price: parseFloat(r.price),
             imageUrls: r.image_url ? r.image_url.split(',') : [],
             isVerified: !!r.is_verified,
-            listingType: r.listing_type,
-            category: r.category_slug,
-            createdAt: r.created_at,
+            mainCategory: r.main_category,
+            subCategory: r.sub_category,
+            createdAt: r.created_at || new Date(),
             sellerId: String(r.user_id)
         })));
-    } catch (e: any) { 
-        console.error("Database Error:", e.message);
-        return c.json({ message: e.message }, 500); 
-    }
+    } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Create listing
 app.post('/api/listings', async (c) => {
     const user = c.get('user');
-    const { title, price, unit, location, category, type, description, imageUrls } = await c.req.json();
+    const { title, price, unit, location, mainCategory, subCategory, description, imageUrls } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
         const result = await sql`
-            INSERT INTO listings (title, price, unit, location, category_slug, listing_type, description, image_url, user_id)
-            VALUES (${title}, ${price}, ${unit}, ${location}, ${category}, ${type}, ${description}, ${imageUrls.join(',')}, ${user.id})
+            INSERT INTO listings (title, price, unit, location, main_category, sub_category, description, image_url, user_id)
+            VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageUrls.join(',')}, ${parseInt(user.id)})
             RETURNING *
         `;
         return c.json({ ...result[0], id: String(result[0].id) });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Update listing
 app.put('/api/listings/:id', async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
-    const { title, price, unit, location, category, type, description, imageUrls } = await c.req.json();
+    const { title, price, unit, location, mainCategory, subCategory, description, imageUrls } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
         const result = await sql`
-            UPDATE listings SET title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, category_slug = ${category}, listing_type = ${type}, description = ${description}, image_url = ${imageUrls.join(',')}
-            WHERE id = ${id} AND user_id = ${user.id}
+            UPDATE listings SET 
+                title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
+                main_category = ${mainCategory}, sub_category = ${subCategory}, 
+                description = ${description}, image_url = ${imageUrls.join(',')}
+            WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)}
             RETURNING *
         `;
         if (!result.length) return c.json({ message: 'Listing not found or not authorized' }, 404);
@@ -151,95 +184,78 @@ app.put('/api/listings/:id', async (c) => {
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Delete listing
 app.delete('/api/listings/:id', async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
     const sql = neon(c.env.DATABASE_URL);
     try {
-        const result = await sql`DELETE FROM listings WHERE id = ${id} AND user_id = ${user.id} RETURNING id`;
+        const result = await sql`DELETE FROM listings WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} RETURNING id`;
         if (!result.length) return c.json({ message: 'Listing not found or not authorized' }, 404);
         return c.json({ message: 'Deleted' });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Get saved listings
 app.get('/api/saved', async (c) => {
     const user = c.get('user');
     const sql = neon(c.env.DATABASE_URL);
     try {
         const rows = await sql`
-            SELECT l.* FROM saved_listings sl
-            JOIN listings l ON sl.listing_id::integer = l.id
-            WHERE sl.user_id = ${String(user.id)}
+            SELECT l.id FROM saved_listings sl
+            JOIN listings l ON sl.listing_id = l.id
+            WHERE sl.user_id = ${parseInt(user.id)}
         `;
         return c.json(rows.map(r => String(r.id)));
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Save listing
 app.post('/api/saved/:id', async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
     const sql = neon(c.env.DATABASE_URL);
     try {
-        await sql`INSERT INTO saved_listings (user_id, listing_id) VALUES (${String(user.id)}, ${parseInt(id)}) ON CONFLICT DO NOTHING`;
+        await sql`INSERT INTO saved_listings (user_id, listing_id) VALUES (${parseInt(user.id)}, ${parseInt(id)}) ON CONFLICT DO NOTHING`;
         return c.json({ message: 'Saved' });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Unsave listing
 app.delete('/api/saved/:id', async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
     const sql = neon(c.env.DATABASE_URL);
     try {
-        await sql`DELETE FROM saved_listings WHERE user_id = ${String(user.id)} AND listing_id = ${parseInt(id)}`;
+        await sql`DELETE FROM saved_listings WHERE user_id = ${parseInt(user.id)} AND listing_id = ${parseInt(id)}`;
         return c.json({ message: 'Unsaved' });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Upload images
 app.post('/api/upload', async (c) => {
     const user = c.get('user');
     const formData = await c.req.formData();
     const files = formData.getAll('photos');
     if (!files || files.length === 0) return c.json({ message: 'No files provided' }, 400);
-
     const urls: string[] = [];
     for (const fileEntry of files) {
         if (typeof fileEntry === 'string') continue;
         const file = fileEntry as File;
         const key = `${user.id}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        
         try {
-            await c.env.R2_BUCKET.put(key, file, {
-                httpMetadata: { contentType: file.type }
-            });
-            const url = `https://pub-f4faac6ec4e94df08e2c56afbf983bf1.r2.dev/${key}`;
-            urls.push(url);
-        } catch (error: any) {
-            return c.json({ message: `Failed to upload image: ${error.message}` }, 500);
-        }
+            await c.env.R2_BUCKET.put(key, file, { httpMetadata: { contentType: file.type } });
+            urls.push(`https://pub-f4faac6ec4e94df08e2c56afbf983bf1.r2.dev/${key}`);
+        } catch (error: any) { return c.json({ message: `Failed to upload image: ${error.message}` }, 500); }
     }
     return c.json({ urls });
 });
 
-// Get user profile
-app.get('/api/users/me', async (c) => {
-    const user = c.get('user');
-    return c.json(user);
-});
+app.get('/api/users/me', async (c) => c.json(c.get('user')));
 
 app.put('/api/users/me', async (c) => {
     const user = c.get('user');
     const { name, email, location } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
-        const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${user.id}`;
+        const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${parseInt(user.id)}`;
         if (existing.length) return c.json({ message: 'Email already in use' }, 409);
-        
-        await sql`UPDATE users SET name = ${name}, email = ${email}, location = ${location} WHERE id = ${user.id}`;
+        await sql`UPDATE users SET name = ${name}, email = ${email}, location = ${location} WHERE id = ${parseInt(user.id)}`;
         return c.json({ message: 'Profile updated successfully' });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
@@ -253,9 +269,9 @@ app.post('/api/conversations', async (c) => {
         const listing = await sql`SELECT user_id FROM listings WHERE id = ${parseInt(listingId)}`;
         if (!listing.length) return c.json({ message: 'Listing not found' }, 404);
         const sellerId = listing[0].user_id;
-        const existing = await sql`SELECT id FROM conversations WHERE listing_id = ${parseInt(listingId)} AND buyer_id = ${user.id} AND seller_id = ${sellerId}`;
+        const existing = await sql`SELECT id FROM conversations WHERE listing_id = ${parseInt(listingId)} AND buyer_id = ${parseInt(user.id)} AND seller_id = ${parseInt(sellerId)}`;
         if (existing.length) return c.json({ id: String(existing[0].id) });
-        const result = await sql`INSERT INTO conversations (listing_id, buyer_id, seller_id) VALUES (${parseInt(listingId)}, ${user.id}, ${sellerId}) RETURNING id`;
+        const result = await sql`INSERT INTO conversations (listing_id, buyer_id, seller_id) VALUES (${parseInt(listingId)}, ${parseInt(user.id)}, ${parseInt(sellerId)}) RETURNING id`;
         return c.json({ id: String(result[0].id) });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
@@ -270,10 +286,10 @@ app.get('/api/conversations', async (c) => {
                 c.listing_id,
                 l.title as listing_title,
                 l.image_url,
-                CASE WHEN c.buyer_id = ${user.id} THEN c.seller_id ELSE c.buyer_id END as other_user_id,
-                CASE WHEN c.buyer_id = ${user.id} THEN u_seller.name ELSE u_buyer.name END as other_user_name,
+                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN c.seller_id ELSE c.buyer_id END as other_user_id,
+                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN u_seller.name ELSE u_buyer.name END as other_user_name,
                 m.content as last_message,
-                m.created_at as last_message_date
+                m.timestamp as last_message_date
             FROM conversations c
             JOIN listings l ON c.listing_id = l.id
             LEFT JOIN users u_buyer ON c.buyer_id = u_buyer.id
@@ -281,8 +297,8 @@ app.get('/api/conversations', async (c) => {
             LEFT JOIN messages m ON c.id = m.conversation_id AND m.id = (
                 SELECT MAX(id) FROM messages WHERE conversation_id = c.id
             )
-            WHERE c.buyer_id = ${user.id} OR c.seller_id = ${user.id}
-            ORDER BY COALESCE(m.created_at, c.created_at) DESC
+            WHERE c.buyer_id = ${parseInt(user.id)} OR c.seller_id = ${parseInt(user.id)}
+            ORDER BY COALESCE(m.timestamp, TO_TIMESTAMP(0)) DESC, c.id DESC
         `;
         return c.json(rows.map(r => ({
             conversationId: String(r.conversation_id),
@@ -302,16 +318,16 @@ app.get('/api/conversations/:id/messages', async (c) => {
     const conversationId = c.req.param('id');
     const sql = neon(c.env.DATABASE_URL);
     try {
-        const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(conversationId)} AND (buyer_id = ${user.id} OR seller_id = ${user.id})`;
+        const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(conversationId)} AND (buyer_id = ${parseInt(user.id)} OR seller_id = ${parseInt(user.id)})`;
         if (!conv.length) return c.json({ message: 'Conversation not found' }, 404);
-        const rows = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, created_at FROM messages WHERE conversation_id = ${parseInt(conversationId)} ORDER BY created_at ASC`;
+        const rows = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, timestamp FROM messages WHERE conversation_id = ${parseInt(conversationId)} ORDER BY timestamp ASC`;
         return c.json(rows.map(r => ({
             id: String(r.id),
             conversation_id: String(r.conversation_id),
             sender_id: String(r.sender_id),
             receiver_id: String(r.receiver_id),
             content: r.content,
-            timestamp: r.created_at
+            timestamp: r.timestamp
         })));
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
@@ -321,16 +337,16 @@ app.post('/api/messages', async (c) => {
     const { conversationId, receiverId, content } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
-        const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(conversationId)} AND (buyer_id = ${user.id} OR seller_id = ${user.id})`;
+        const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(conversationId)} AND (buyer_id = ${parseInt(user.id)} OR seller_id = ${parseInt(user.id)})`;
         if (!conv.length) return c.json({ message: 'Conversation not found' }, 404);
-        const result = await sql`INSERT INTO messages (conversation_id, sender_id, receiver_id, content) VALUES (${parseInt(conversationId)}, ${user.id}, ${parseInt(receiverId)}, ${content}) RETURNING id, created_at`;
+        const result = await sql`INSERT INTO messages (conversation_id, sender_id, receiver_id, content) VALUES (${parseInt(conversationId)}, ${parseInt(user.id)}, ${parseInt(receiverId)}, ${content}) RETURNING id, timestamp`;
         return c.json({
             id: String(result[0].id),
-            conversation_id: conversationId,
+            conversation_id: String(conversationId),
             sender_id: String(user.id),
-            receiver_id: receiverId,
+            receiver_id: String(receiverId),
             content: content,
-            timestamp: result[0].created_at
+            timestamp: result[0].timestamp
         });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });

@@ -1,7 +1,5 @@
 import React from 'react';
 
-export type ListingType = 'product' | 'service';
-
 export interface User {
   id: string;
   name: string;
@@ -17,14 +15,14 @@ export interface Listing {
   price: number;
   unit: string;
   location: string;
-  category: string;
-  listingType: ListingType;
+  mainCategory: string; // Renamed from listingType/category_slug
+  subCategory: string;  // Renamed from category
   description: string;
   imageUrls: string[];
   createdAt: Date;
   sellerName: string;
   sellerId?: string;
-  sellerPhone?: string; // Added phone number
+  sellerPhone?: string;
   isVerified?: boolean;
 }
 
@@ -44,7 +42,6 @@ export interface Message {
   timestamp: Date;
 }
 
-// Helper type for the Messages List view
 export interface ChatSession {
   conversationId: string; 
   listingId: string;

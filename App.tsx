@@ -1,13 +1,15 @@
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { CATEGORIES, SUB_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
 import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal, VendorProfileView } from './components/Components';
 import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon, RefreshCwIcon } from './components/Icons';
 import ThemeToggle from './components/ThemeToggle';
+import { App as CapApp } from '@capacitor/app';
 
 // Use the LIVE Cloudflare Worker URL as the primary endpoint for the app
 const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
+const PAGE_SIZE = 12;
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -19,18 +21,24 @@ export default function App() {
   // Data State
   const [listings, setListings] = useState<Listing[]>([]);
   const [isListingsLoading, setIsListingsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
 
-  // Filter UI State (Uncontrolled/Buffered)
+  // Filter UI State
   const [selectedMainCategory, setSelectedMainCategory] = useState('all');
   const [selectedSubCategory, setSelectedSubCategory] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [selectedCity, setSelectedCity] = useState('All Cities');
   const [sortBy, setSortBy] = useState('date-desc');
   
-  // Active Filter state (Applied to Memo)
+  // Active Filter state (Triggers re-fetch)
   const [appliedFilters, setAppliedFilters] = useState({
-    searchQuery: '',
+    search: '',
+    category: 'all',
+    city: 'All Cities',
+    sortBy: 'date-desc'
   });
 
   const [viewState, setViewState] = useState<ViewState>('home');
@@ -43,23 +51,134 @@ export default function App() {
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [totalUnreadMessages, setTotalUnreadMessages] = useState(0);
 
-  const fetchListings = useCallback(async () => {
+  // Refs
+  const loaderRef = useRef<HTMLDivElement>(null);
+  const lastBackPressTime = useRef<number>(0);
+  const hasClearedCache = useRef<boolean>(false);
+
+  // Cache clearing logic on app start
+  useEffect(() => {
+    if (!hasClearedCache.current) {
+        // Clear browser/WebView caches (Storage, Cookies, etc. that might be stale)
+        // We keep 'token' and 'user' for persistent login, but could clear others
+        const persistentKeys = ['token', 'user', 'theme'];
+        
+        // Remove all other keys from localStorage
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && !persistentKeys.includes(key)) {
+                localStorage.removeItem(key);
+            }
+        }
+
+        // Clear session storage completely
+        sessionStorage.clear();
+
+        // If using Cache API (for images/requests)
+        if ('caches' in window) {
+            caches.keys().then((names) => {
+                for (let name of names) caches.delete(name);
+            });
+        }
+
+        console.log("App Restart: Temporary caches cleared.");
+        hasClearedCache.current = true;
+    }
+  }, []);
+
+  const fetchListings = useCallback(async (currentOffset: number, filters = appliedFilters, clearExisting = false) => {
     try {
-      const response = await fetch(`${API_URL}/api/listings`);
+      if (currentOffset === 0) setIsListingsLoading(true);
+      else setIsLoadingMore(true);
+
+      const params = new URLSearchParams({
+        limit: PAGE_SIZE.toString(),
+        offset: currentOffset.toString(),
+        category: filters.category,
+        city: filters.city,
+        search: filters.search,
+        sortBy: filters.sortBy
+      });
+
+      const response = await fetch(`${API_URL}/api/listings?${params}`, {
+        // Force no-cache for fresh data after restart
+        cache: 'no-store'
+      });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      setListings(data);
+      
+      if (clearExisting) {
+        setListings(data);
+      } else {
+        setListings(prev => [...prev, ...data]);
+      }
+      
+      setHasMore(data.length === PAGE_SIZE);
+      setOffset(currentOffset + data.length);
     } catch (e) {
       console.error("App: Failed to load listings:", e);
     } finally {
       setIsListingsLoading(false);
+      setIsLoadingMore(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [appliedFilters]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetchListings();
+    setOffset(0);
+    fetchListings(0, appliedFilters, true);
+  };
+
+  const loadMore = useCallback(() => {
+    if (!isLoadingMore && hasMore && viewState === 'home') {
+      fetchListings(offset);
+    }
+  }, [isLoadingMore, hasMore, offset, viewState, fetchListings]);
+
+  // Infinite Scroll Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMore && !isLoadingMore && !isListingsLoading) {
+        loadMore();
+      }
+    }, { threshold: 0.1 });
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [loadMore, hasMore, isLoadingMore, isListingsLoading]);
+
+  // Update filters and reset list
+  useEffect(() => {
+    setOffset(0);
+    fetchListings(0, appliedFilters, true);
+  }, [appliedFilters]);
+
+  const handleApplyFilters = () => {
+    setAppliedFilters({
+        search: searchInput,
+        category: selectedSubCategory !== 'all' ? selectedSubCategory : selectedMainCategory,
+        city: selectedCity,
+        sortBy: sortBy
+    });
+  };
+
+  const resetAllFilters = () => {
+    setSelectedMainCategory('all');
+    setSelectedSubCategory('all');
+    setSelectedCity('All Cities');
+    setSearchInput('');
+    setSortBy('date-desc');
+    setAppliedFilters({
+        search: '',
+        category: 'all',
+        city: 'All Cities',
+        sortBy: 'date-desc'
+    });
+    setViewState('home');
   };
 
   const fetchSavedListings = async () => {
@@ -67,7 +186,8 @@ export default function App() {
     if (!token) return;
     try {
         const response = await fetch(`${API_URL}/api/saved`, {
-            headers: { 'x-access-token': token }
+            headers: { 'x-access-token': token },
+            cache: 'no-store'
         });
         if (response.ok) {
             const ids = await response.json();
@@ -83,7 +203,8 @@ export default function App() {
     if (!token || !user) return;
     try {
         const response = await fetch(`${API_URL}/api/conversations`, {
-            headers: { 'x-access-token': token }
+            headers: { 'x-access-token': token },
+            cache: 'no-store'
         });
         if (response.ok) {
             const conversations = await response.json();
@@ -107,7 +228,6 @@ export default function App() {
         }
       }
       setIsUserLoading(false);
-      fetchListings();
 
       if (localStorage.getItem('theme') === 'dark' || 
          (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -119,7 +239,7 @@ export default function App() {
       }
     };
     initApp();
-  }, [fetchListings]);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -127,6 +247,26 @@ export default function App() {
       fetchUnreadCount();
     }
   }, [user]);
+
+  // Handle Android Back Button
+  useEffect(() => {
+    const backButtonHandler = CapApp.addListener('backButton', () => {
+      if (showAuth) { setShowAuth(false); return; }
+      if (showEditProfile) { setShowEditProfile(false); return; }
+      if (viewState === 'chat-conversation') setViewState('messages');
+      else if (viewState === 'vendor-profile') setViewState('details');
+      else if (viewState !== 'home') setViewState('home');
+      else {
+        const now = Date.now();
+        if (now - lastBackPressTime.current < 2000) CapApp.exitApp();
+        else {
+          lastBackPressTime.current = now;
+          console.log("Press back again to exit");
+        }
+      }
+    });
+    return () => { backButtonHandler.then(h => h.remove()); };
+  }, [viewState, showAuth, showEditProfile]);
 
   const toggleDarkMode = () => {
     setIsDarkMode(prev => {
@@ -141,49 +281,6 @@ export default function App() {
       return newIsDark;
     });
   };
-  
-  const resetAllFilters = () => {
-    setSelectedMainCategory('all');
-    setSelectedSubCategory('all');
-    setSelectedCity('All Cities');
-    setSearchInput('');
-    setSortBy('date-desc');
-    setAppliedFilters({ searchQuery: '' });
-    setViewState('home');
-  };
-
-  const handleApplyFilters = () => {
-    setAppliedFilters({
-        searchQuery: searchInput,
-    });
-  };
-
-  const filteredListings = useMemo(() => {
-    let filtered = listings.filter(item => {
-      const matchesMain = selectedMainCategory === 'all' || 
-                         item.listingType === selectedMainCategory || 
-                         (selectedMainCategory === 'materials' && item.listingType === 'product') || 
-                         (selectedMainCategory === 'services' && item.listingType === 'service') || 
-                         (selectedMainCategory === 'rentals' && item.listingType === 'service' && item.category === 'rental');
-      
-      const matchesSub = selectedSubCategory === 'all' || item.category === selectedSubCategory;
-      const matchesCity = selectedCity === 'All Cities' || item.location === selectedCity;
-      const matchesSearch = item.title.toLowerCase().includes(appliedFilters.searchQuery.toLowerCase()) || 
-                           (item.description && item.description.toLowerCase().includes(appliedFilters.searchQuery.toLowerCase()));
-      
-      return matchesMain && matchesSub && matchesCity && matchesSearch;
-    });
-
-    filtered.sort((a, b) => {
-      if (sortBy === 'date-desc') return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-      if (sortBy === 'date-asc') return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
-      if (sortBy === 'price-asc') return a.price - b.price;
-      if (sortBy === 'price-desc') return b.price - a.price;
-      return 0;
-    });
-
-    return filtered;
-  }, [listings, selectedMainCategory, selectedSubCategory, selectedCity, appliedFilters, sortBy]);
 
   const handleAuthSuccess = (data: { auth: boolean, token: string, user: User }) => {
     localStorage.setItem('token', data.token);
@@ -206,9 +303,7 @@ export default function App() {
     const token = localStorage.getItem('token');
     if (!token) throw new Error('Not authenticated');
     const photoFormData = new FormData();
-    photos.forEach((photo) => {
-        photoFormData.append('photos', photo);
-    });
+    photos.forEach((photo) => photoFormData.append('photos', photo));
     const uploadRes = await fetch(`${API_URL}/api/upload`, { method: 'POST', headers: { 'x-access-token': token }, body: photoFormData });
     const uploadData = await uploadRes.json();
     if (!uploadRes.ok) throw new Error(uploadData.message || 'Failed to upload images');
@@ -231,7 +326,7 @@ export default function App() {
             throw new Error(responseData.message || `Failed to ${isEditing ? 'update' : 'create'} listing`);
         }
         alert(`Listing ${isEditing ? 'updated' : 'created'} successfully!`);
-        await fetchListings();
+        handleRefresh();
         setViewState('home');
         setEditingListing(undefined);
     } catch (error: any) { alert(`Error: ${error.message}`); } finally { setIsListingsLoading(false); }
@@ -248,15 +343,12 @@ export default function App() {
           });
           const data = await response.json();
           if (!response.ok) throw new Error(data.message);
-          
           const updatedUser = { ...user, ...formData };
           setUser(updatedUser);
           localStorage.setItem('user', JSON.stringify(updatedUser));
           setShowEditProfile(false);
           alert("Profile updated successfully!");
-      } catch (error: any) {
-          alert(`Failed to update profile: ${error.message}`);
-      }
+      } catch (error: any) { alert(`Failed to update profile: ${error.message}`); }
   };
 
   const openListing = (id: string) => { setSelectedListingId(id.toString()); setViewState('details'); };
@@ -278,31 +370,22 @@ export default function App() {
   const toggleSave = async (id: string) => {
     const token = localStorage.getItem('token');
     if (!user || !token) { setShowAuth(true); return; }
-    
     const isCurrentlySaved = savedListingIds.has(id);
     const method = isCurrentlySaved ? 'DELETE' : 'POST';
-    
     setSavedListingIds(prev => {
         const next = new Set(prev);
         if (isCurrentlySaved) next.delete(id); else next.add(id);
         return next;
     });
-
     try {
-        const response = await fetch(`${API_URL}/api/saved/${id}`, {
-            method: method,
-            headers: { 'x-access-token': token }
-        });
+        const response = await fetch(`${API_URL}/api/saved/${id}`, { method: method, headers: { 'x-access-token': token } });
         if (!response.ok) {
             setSavedListingIds(prev => {
                 const next = new Set(prev);
                 if (isCurrentlySaved) next.add(id); else next.delete(id);
                 return next;
             });
-            if (response.status === 401) {
-                handleLogout();
-                setShowAuth(true);
-            }
+            if (response.status === 401) { handleLogout(); setShowAuth(true); }
         }
     } catch (e) {
         setSavedListingIds(prev => {
@@ -313,37 +396,14 @@ export default function App() {
     }
   };
 
-  const checkAuthAndGo = (targetView: ViewState) => {
-    if (user) setViewState(targetView); else setShowAuth(true);
-  };
+  const checkAuthAndGo = (targetView: ViewState) => { if (user) setViewState(targetView); else setShowAuth(true); };
 
   // Pull to refresh detection logic
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [pullDistance, setPullDistance] = useState(0);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.scrollY === 0) {
-      setTouchStart(e.targetTouches[0].clientY);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStart !== null && window.scrollY === 0) {
-      const currentTouch = e.targetTouches[0].clientY;
-      const distance = currentTouch - touchStart;
-      if (distance > 0) {
-        setPullDistance(Math.min(distance, 80));
-      }
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (pullDistance > 60) {
-      handleRefresh();
-    }
-    setTouchStart(null);
-    setPullDistance(0);
-  };
+  const handleTouchStart = (e: React.TouchEvent) => { if (window.scrollY === 0) setTouchStart(e.targetTouches[0].clientY); };
+  const handleTouchMove = (e: React.TouchEvent) => { if (touchStart !== null && window.scrollY === 0) { const distance = e.targetTouches[0].clientY - touchStart; if (distance > 0) setPullDistance(Math.min(distance, 80)); } };
+  const handleTouchEnd = () => { if (pullDistance > 60) handleRefresh(); setTouchStart(null); setPullDistance(0); };
 
   return (
     <div 
@@ -394,16 +454,16 @@ export default function App() {
 
                 {viewState === 'home' && (
                     <div className="grid grid-cols-3 gap-2">
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCity} onChange={e => { setSelectedCity(e.target.value); setTimeout(handleApplyFilters, 0); }}>
                             <option>All Cities</option>
                             {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); setTimeout(handleApplyFilters, 0); }}>
                             {CATEGORIES.map(cat => (
                                 <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                             ))}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedSubCategory} onChange={e => { setSelectedSubCategory(e.target.value); setTimeout(handleApplyFilters, 0); }}>
                             <option value="all">Sub-Categories</option>
                             {selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (
                                 <option key={sub.value} value={sub.value}>{sub.label}</option>
@@ -420,7 +480,7 @@ export default function App() {
                     <div className="mb-6 flex justify-end">
                         <div className="flex items-center bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg px-3 h-10 shadow-sm">
                             <span className="mr-2 text-xs font-bold text-gray-500 dark:text-dark-subtext">Sort by:</span>
-                            <select className="bg-transparent border-none outline-none text-gray-900 dark:text-dark-text text-xs font-bold p-0 focus:ring-0 cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                            <select className="bg-transparent border-none outline-none text-gray-900 dark:text-dark-text text-xs font-bold p-0 focus:ring-0 cursor-pointer" value={sortBy} onChange={e => { setSortBy(e.target.value); setTimeout(handleApplyFilters, 0); }}>
                                 <option value="date-desc">Newest</option>
                                 <option value="date-asc">Oldest</option>
                                 <option value="price-asc">Price: Low-High</option>
@@ -429,16 +489,29 @@ export default function App() {
                         </div>
                     </div>
 
-                    {(isListingsLoading && !isRefreshing) ? (
+                    {(isListingsLoading && listings.length === 0) ? (
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                             {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-2xl aspect-square animate-pulse"></div>)}
                         </div>
-                    ) : filteredListings.length > 0 ? (
+                    ) : listings.length > 0 ? (
+                        <>
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        {filteredListings.map(item => (
+                        {listings.map(item => (
                             <ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} />
                         ))}
                         </div>
+                        <div ref={loaderRef} className="h-20 flex items-center justify-center mt-4">
+                            {isLoadingMore && (
+                                <div className="flex flex-col items-center">
+                                    <RefreshCwIcon className="w-6 h-6 text-tumbi-600 animate-spin" />
+                                    <p className="text-xs text-gray-500 mt-2 font-medium">Loading more listings...</p>
+                                </div>
+                            )}
+                            {!hasMore && listings.length > 0 && (
+                                <p className="text-sm text-gray-400 font-medium italic">No more listings to show</p>
+                            )}
+                        </div>
+                        </>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-24 text-center">
                             <SearchIcon className="w-10 h-10 text-gray-400 mb-6" />
@@ -452,7 +525,7 @@ export default function App() {
 
         {viewState === 'saved' && user && <SavedView listings={listings} savedIds={savedListingIds} onOpen={openListing} onToggleSave={toggleSave} />}
         {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} onUnreadCountChange={setTotalUnreadMessages} />}
-        {viewState === 'profile' && user ? <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={startEditListing} onDeleteListing={(id) => { if(confirm('Delete this listing?')) fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => fetchListings())}} onEditProfile={() => setShowEditProfile(true)} /> : viewState === 'profile' && !user ? <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} /> : null}
+        {viewState === 'profile' && user ? <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={startEditListing} onDeleteListing={(id) => { if(confirm('Delete this listing?')) fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => handleRefresh())}} onEditProfile={() => setShowEditProfile(true)} /> : viewState === 'profile' && !user ? <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} /> : null}
 
         <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-card border-t border-gray-200 dark:border-dark-border z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
             <div className="flex justify-around items-center h-16 max-w-4xl mx-auto px-2">
