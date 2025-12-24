@@ -103,7 +103,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
 
     return (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-dark-card rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
+            <div className="bg-white dark:bg-dark-card rounded-2xl w-full max-sm overflow-hidden shadow-2xl relative">
                 <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-gray-100 dark:hover:bg-dark-bg rounded-full text-gray-500">
                     <XIcon className="w-5 h-5" />
                 </button>
@@ -289,27 +289,32 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
         }
     }
     return () => {
-        photoPreviews.forEach(preview => URL.revokeObjectURL(preview));
+        photoPreviews.forEach(preview => {
+            if (preview.startsWith('blob:')) URL.revokeObjectURL(preview);
+        });
     };
   }, [initialData]);
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
         const filesArray = Array.from(e.target.files);
-        const remainingSlots = 5 - photos.length;
+        const remainingSlots = 5 - photoPreviews.length;
         const filesToAdd = filesArray.slice(0, remainingSlots);
 
         if (filesArray.length > remainingSlots) {
             alert(`You can only upload a maximum of 5 photos.`);
         }
 
+        if (filesToAdd.length === 0) return;
+
         // Optimize images before adding to state
         const optimizedFiles = await Promise.all(
             filesToAdd.map(file => resizeImage(file, 800, 800, 0.8))
         );
 
-        setPhotos(prev => [...prev, ...optimizedFiles]);
         const newPreviews = optimizedFiles.map(file => URL.createObjectURL(file));
+        
+        // Update previews immediately for UI feedback
         setPhotoPreviews(prev => [...prev, ...newPreviews]);
 
         // Start uploading
@@ -321,9 +326,8 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
             setUploadProgress(100);
         } catch (error) {
             alert(`Failed to upload photos: ${error}`);
-            // Remove the failed photos
-            setPhotos(prev => prev.slice(0, prev.length - optimizedFiles.length));
-            setPhotoPreviews(prev => prev.slice(0, prev.length - newPreviews.length));
+            // Remove the failed photos from previews
+            setPhotoPreviews(prev => prev.filter(p => !newPreviews.includes(p)));
             newPreviews.forEach(url => URL.revokeObjectURL(url));
         } finally {
             setIsUploading(false);
@@ -333,13 +337,13 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
 
   const removePhoto = (index: number) => {
       const previewToRemove = photoPreviews[index];
-      const isNewPhoto = previewToRemove.startsWith('blob:');
-      setPhotos(prev => prev.filter((_, i) => i !== index));
+      
       setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
-      if (isNewPhoto) {
-          setUploadedUrls(prev => prev.filter((_, i) => i !== index));
+      setUploadedUrls(prev => prev.filter((_, i) => i !== index));
+      
+      if (previewToRemove.startsWith('blob:')) {
+          URL.revokeObjectURL(previewToRemove);
       }
-      URL.revokeObjectURL(previewToRemove);
   }
 
   const handleSubmit = (e: React.FormEvent) => {

@@ -27,72 +27,12 @@ app.use('/*', cors({
 // Health check
 app.get('/health', (c) => c.text('OK'));
 
-// Init tables (for dev only, remove in prod)
-app.post('/api/init', async (c) => {
-    const sql = neon(c.env.DATABASE_URL);
-    try {
-        await sql`CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            phone TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            location TEXT,
-            created_at TIMESTAMP DEFAULT NOW()
-        )`;
-        await sql`CREATE TABLE IF NOT EXISTS listings (
-            id SERIAL PRIMARY KEY,
-            title TEXT NOT NULL,
-            price DECIMAL NOT NULL,
-            unit TEXT,
-            location TEXT,
-            category_slug TEXT,
-            listing_type TEXT,
-            description TEXT,
-            image_url TEXT,
-            user_id INTEGER REFERENCES users(id),
-            is_verified BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT NOW()
-        )`;
-        await sql`CREATE TABLE IF NOT EXISTS saved_listings (
-            user_id INTEGER REFERENCES users(id),
-            listing_id INTEGER REFERENCES listings(id),
-            PRIMARY KEY (user_id, listing_id)
-        )`;
-        await sql`CREATE TABLE IF NOT EXISTS conversations (
-            id SERIAL PRIMARY KEY,
-            listing_id INTEGER REFERENCES listings(id),
-            buyer_id INTEGER REFERENCES users(id),
-            seller_id INTEGER REFERENCES users(id),
-            created_at TIMESTAMP DEFAULT NOW()
-        )`;
-        await sql`CREATE TABLE IF NOT EXISTS messages (
-            id SERIAL PRIMARY KEY,
-            conversation_id INTEGER REFERENCES conversations(id),
-            sender_id INTEGER REFERENCES users(id),
-            receiver_id INTEGER REFERENCES users(id),
-            content TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT NOW()
-        )`;
-        
-        // Ensure columns exist (for schema updates)
-        try {
-            await sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`;
-            await sql`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`;
-        } catch (e) {
-            // Ignore errors if columns already exist
-        }
-        
-        return c.json({ message: 'Tables created' });
-    } catch (e: any) { return c.json({ message: e.message }, 500); }
-});
-
+// --- AUTH MIDDLEWARE ---
 app.use('/api/*', async (c, next) => {
     const publicPaths = [
         { path: '/api/register', methods: ['POST'] },
         { path: '/api/login', methods: ['POST'] },
-        { path: '/api/listings', methods: ['GET'] },
-        { path: '/api/init', methods: ['POST'] }
+        { path: '/api/listings', methods: ['GET'] }
     ];
     const isPublic = publicPaths.some(p => {
         if (p.path.includes(':key')) {
@@ -150,7 +90,7 @@ app.post('/api/login', async (c) => {
 
 // --- LISTINGS ---
 app.get('/api/listings', async (c) => {
-    console.log("Local Backend: Fetching listings from Neon...");
+    console.log("Fetching listings from Neon...");
     const sql = neon(c.env.DATABASE_URL);
     try {
         const rows = await sql`
@@ -159,7 +99,6 @@ app.get('/api/listings', async (c) => {
             LEFT JOIN users u ON l.user_id = u.id 
             ORDER BY created_at DESC
         `;
-        console.log(`Local Backend: Found ${rows.length} listings.`);
         return c.json(rows.map(r => ({
             ...r,
             id: String(r.id),
@@ -172,7 +111,7 @@ app.get('/api/listings', async (c) => {
             sellerId: String(r.user_id)
         })));
     } catch (e: any) { 
-        console.error("Local Backend Error:", e.message);
+        console.error("Database Error:", e.message);
         return c.json({ message: e.message }, 500); 
     }
 });
@@ -226,18 +165,13 @@ app.get('/api/saved', async (c) => {
     const user = c.get('user');
     const sql = neon(c.env.DATABASE_URL);
     try {
-        console.log('GET /api/saved user.id:', user.id);
         const rows = await sql`
             SELECT l.* FROM saved_listings sl
             JOIN listings l ON sl.listing_id::integer = l.id
             WHERE sl.user_id = ${String(user.id)}
         `;
-        console.log('GET /api/saved rows:', rows.length);
         return c.json(rows.map(r => String(r.id)));
-    } catch (e: any) { 
-        console.error('GET /api/saved error:', e.message);
-        return c.json({ message: e.message }, 500); 
-    }
+    } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
 // Save listing
@@ -265,36 +199,26 @@ app.delete('/api/saved/:id', async (c) => {
 // Upload images
 app.post('/api/upload', async (c) => {
     const user = c.get('user');
-    console.log('Upload request received for user:', user?.id);
     const formData = await c.req.formData();
-    const files = formData.getAll('photos'); // Changed from 'file' to 'photos'
-    console.log('Files received:', files.length);
+    const files = formData.getAll('photos');
     if (!files || files.length === 0) return c.json({ message: 'No files provided' }, 400);
 
     const urls: string[] = [];
     for (const fileEntry of files) {
-        if (typeof fileEntry === 'string') continue; // Skip if string
+        if (typeof fileEntry === 'string') continue;
         const file = fileEntry as File;
         const key = `${user.id}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        console.log('Uploading file with key:', key);
         
         try {
-            // Upload file directly as Blob
             await c.env.R2_BUCKET.put(key, file, {
                 httpMetadata: { contentType: file.type }
             });
-            console.log('File uploaded successfully to R2');
-            
-            // Use direct R2 public URL
             const url = `https://pub-f4faac6ec4e94df08e2c56afbf983bf1.r2.dev/${key}`;
             urls.push(url);
         } catch (error: any) {
-            console.error('R2 upload error:', error);
             return c.json({ message: `Failed to upload image: ${error.message}` }, 500);
         }
     }
-
-    console.log('Upload completed, returning URLs:', urls);
     return c.json({ urls });
 });
 
@@ -309,7 +233,6 @@ app.put('/api/users/me', async (c) => {
     const { name, email, location } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
-        // Check if email is already taken by another user
         const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${user.id}`;
         if (existing.length) return c.json({ message: 'Email already in use' }, 409);
         
@@ -319,31 +242,21 @@ app.put('/api/users/me', async (c) => {
 });
 
 // --- CHAT ---
-// Start a new conversation
 app.post('/api/conversations', async (c) => {
     const user = c.get('user');
     const { listingId } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
-        // Get the listing to find the seller
         const listing = await sql`SELECT user_id FROM listings WHERE id = ${parseInt(listingId)}`;
         if (!listing.length) return c.json({ message: 'Listing not found' }, 404);
-        
         const sellerId = listing[0].user_id;
-        
-        // Check if conversation already exists
         const existing = await sql`SELECT id FROM conversations WHERE listing_id = ${parseInt(listingId)} AND buyer_id = ${user.id} AND seller_id = ${sellerId}`;
-        if (existing.length) {
-            return c.json({ id: String(existing[0].id) });
-        }
-        
-        // Create new conversation
+        if (existing.length) return c.json({ id: String(existing[0].id) });
         const result = await sql`INSERT INTO conversations (listing_id, buyer_id, seller_id) VALUES (${parseInt(listingId)}, ${user.id}, ${sellerId}) RETURNING id`;
         return c.json({ id: String(result[0].id) });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Get user's conversations
 app.get('/api/conversations', async (c) => {
     const user = c.get('user');
     const sql = neon(c.env.DATABASE_URL);
@@ -368,7 +281,6 @@ app.get('/api/conversations', async (c) => {
             WHERE c.buyer_id = ${user.id} OR c.seller_id = ${user.id}
             ORDER BY COALESCE(m.created_at, c.created_at) DESC
         `;
-        
         return c.json(rows.map(r => ({
             conversationId: String(r.conversation_id),
             listingId: String(r.listing_id),
@@ -382,23 +294,14 @@ app.get('/api/conversations', async (c) => {
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Get messages for a conversation
 app.get('/api/conversations/:id/messages', async (c) => {
     const user = c.get('user');
     const conversationId = c.req.param('id');
     const sql = neon(c.env.DATABASE_URL);
     try {
-        // Verify user is part of the conversation
         const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(conversationId)} AND (buyer_id = ${user.id} OR seller_id = ${user.id})`;
         if (!conv.length) return c.json({ message: 'Conversation not found' }, 404);
-        
-        const rows = await sql`
-            SELECT id, conversation_id, sender_id, receiver_id, content, created_at
-            FROM messages 
-            WHERE conversation_id = ${parseInt(conversationId)}
-            ORDER BY created_at ASC
-        `;
-        
+        const rows = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, created_at FROM messages WHERE conversation_id = ${parseInt(conversationId)} ORDER BY created_at ASC`;
         return c.json(rows.map(r => ({
             id: String(r.id),
             conversation_id: String(r.conversation_id),
@@ -410,22 +313,14 @@ app.get('/api/conversations/:id/messages', async (c) => {
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// Send a message
 app.post('/api/messages', async (c) => {
     const user = c.get('user');
     const { conversationId, receiverId, content } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
-        // Verify user is part of the conversation
         const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(conversationId)} AND (buyer_id = ${user.id} OR seller_id = ${user.id})`;
         if (!conv.length) return c.json({ message: 'Conversation not found' }, 404);
-        
-        const result = await sql`
-            INSERT INTO messages (conversation_id, sender_id, receiver_id, content)
-            VALUES (${parseInt(conversationId)}, ${user.id}, ${parseInt(receiverId)}, ${content})
-            RETURNING id, created_at
-        `;
-        
+        const result = await sql`INSERT INTO messages (conversation_id, sender_id, receiver_id, content) VALUES (${parseInt(conversationId)}, ${user.id}, ${parseInt(receiverId)}, ${content}) RETURNING id, created_at`;
         return c.json({
             id: String(result[0].id),
             conversation_id: conversationId,

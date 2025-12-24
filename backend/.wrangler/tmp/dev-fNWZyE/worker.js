@@ -35,7 +35,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// .wrangler/tmp/bundle-EBMoQY/checked-fetch.js
+// .wrangler/tmp/bundle-2juSwE/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -53,7 +53,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-EBMoQY/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-2juSwE/checked-fetch.js"() {
     "use strict";
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
@@ -67,14 +67,14 @@ var init_checked_fetch = __esm({
   }
 });
 
-// .wrangler/tmp/bundle-EBMoQY/strip-cf-connecting-ip-header.js
+// .wrangler/tmp/bundle-2juSwE/strip-cf-connecting-ip-header.js
 function stripCfConnectingIPHeader(input, init) {
   const request = new Request(input, init);
   request.headers.delete("CF-Connecting-IP");
   return request;
 }
 var init_strip_cf_connecting_ip_header = __esm({
-  ".wrangler/tmp/bundle-EBMoQY/strip-cf-connecting-ip-header.js"() {
+  ".wrangler/tmp/bundle-2juSwE/strip-cf-connecting-ip-header.js"() {
     "use strict";
     __name(stripCfConnectingIPHeader, "stripCfConnectingIPHeader");
     globalThis.fetch = new Proxy(globalThis.fetch, {
@@ -1936,12 +1936,12 @@ var require_bcrypt = __commonJS({
   }
 });
 
-// .wrangler/tmp/bundle-EBMoQY/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-2juSwE/middleware-loader.entry.ts
 init_checked_fetch();
 init_strip_cf_connecting_ip_header();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-EBMoQY/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-2juSwE/middleware-insertion-facade.js
 init_checked_fetch();
 init_strip_cf_connecting_ip_header();
 init_modules_watch_stub();
@@ -10624,68 +10624,11 @@ app.use("/*", cors({
   credentials: true
 }));
 app.get("/health", (c) => c.text("OK"));
-app.post("/api/init", async (c) => {
-  const sql = Ys(c.env.DATABASE_URL);
-  try {
-    await sql`CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            phone TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            location TEXT,
-            created_at TIMESTAMP DEFAULT NOW()
-        )`;
-    await sql`CREATE TABLE IF NOT EXISTS listings (
-            id SERIAL PRIMARY KEY,
-            title TEXT NOT NULL,
-            price DECIMAL NOT NULL,
-            unit TEXT,
-            location TEXT,
-            category_slug TEXT,
-            listing_type TEXT,
-            description TEXT,
-            image_url TEXT,
-            user_id INTEGER REFERENCES users(id),
-            is_verified BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT NOW()
-        )`;
-    await sql`CREATE TABLE IF NOT EXISTS saved_listings (
-            user_id INTEGER REFERENCES users(id),
-            listing_id INTEGER REFERENCES listings(id),
-            PRIMARY KEY (user_id, listing_id)
-        )`;
-    await sql`CREATE TABLE IF NOT EXISTS conversations (
-            id SERIAL PRIMARY KEY,
-            listing_id INTEGER REFERENCES listings(id),
-            buyer_id INTEGER REFERENCES users(id),
-            seller_id INTEGER REFERENCES users(id),
-            created_at TIMESTAMP DEFAULT NOW()
-        )`;
-    await sql`CREATE TABLE IF NOT EXISTS messages (
-            id SERIAL PRIMARY KEY,
-            conversation_id INTEGER REFERENCES conversations(id),
-            sender_id INTEGER REFERENCES users(id),
-            receiver_id INTEGER REFERENCES users(id),
-            content TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT NOW()
-        )`;
-    try {
-      await sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`;
-      await sql`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`;
-    } catch (e) {
-    }
-    return c.json({ message: "Tables created" });
-  } catch (e) {
-    return c.json({ message: e.message }, 500);
-  }
-});
 app.use("/api/*", async (c, next) => {
   const publicPaths = [
     { path: "/api/register", methods: ["POST"] },
     { path: "/api/login", methods: ["POST"] },
-    { path: "/api/listings", methods: ["GET"] },
-    { path: "/api/init", methods: ["POST"] }
+    { path: "/api/listings", methods: ["GET"] }
   ];
   const isPublic = publicPaths.some((p2) => {
     if (p2.path.includes(":key")) {
@@ -10742,7 +10685,7 @@ app.post("/api/login", async (c) => {
   }
 });
 app.get("/api/listings", async (c) => {
-  console.log("Local Backend: Fetching listings from Neon...");
+  console.log("Fetching listings from Neon...");
   const sql = Ys(c.env.DATABASE_URL);
   try {
     const rows = await sql`
@@ -10751,7 +10694,6 @@ app.get("/api/listings", async (c) => {
             LEFT JOIN users u ON l.user_id = u.id 
             ORDER BY created_at DESC
         `;
-    console.log(`Local Backend: Found ${rows.length} listings.`);
     return c.json(rows.map((r) => ({
       ...r,
       id: String(r.id),
@@ -10764,7 +10706,7 @@ app.get("/api/listings", async (c) => {
       sellerId: String(r.user_id)
     })));
   } catch (e) {
-    console.error("Local Backend Error:", e.message);
+    console.error("Database Error:", e.message);
     return c.json({ message: e.message }, 500);
   }
 });
@@ -10818,16 +10760,13 @@ app.get("/api/saved", async (c) => {
   const user = c.get("user");
   const sql = Ys(c.env.DATABASE_URL);
   try {
-    console.log("GET /api/saved user.id:", user.id);
     const rows = await sql`
             SELECT l.* FROM saved_listings sl
             JOIN listings l ON sl.listing_id::integer = l.id
             WHERE sl.user_id = ${String(user.id)}
         `;
-    console.log("GET /api/saved rows:", rows.length);
     return c.json(rows.map((r) => String(r.id)));
   } catch (e) {
-    console.error("GET /api/saved error:", e.message);
     return c.json({ message: e.message }, 500);
   }
 });
@@ -10855,10 +10794,8 @@ app.delete("/api/saved/:id", async (c) => {
 });
 app.post("/api/upload", async (c) => {
   const user = c.get("user");
-  console.log("Upload request received for user:", user?.id);
   const formData = await c.req.formData();
   const files = formData.getAll("photos");
-  console.log("Files received:", files.length);
   if (!files || files.length === 0)
     return c.json({ message: "No files provided" }, 400);
   const urls2 = [];
@@ -10867,20 +10804,16 @@ app.post("/api/upload", async (c) => {
       continue;
     const file = fileEntry;
     const key = `${user.id}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-    console.log("Uploading file with key:", key);
     try {
       await c.env.R2_BUCKET.put(key, file, {
         httpMetadata: { contentType: file.type }
       });
-      console.log("File uploaded successfully to R2");
       const url = `https://pub-f4faac6ec4e94df08e2c56afbf983bf1.r2.dev/${key}`;
       urls2.push(url);
     } catch (error) {
-      console.error("R2 upload error:", error);
       return c.json({ message: `Failed to upload image: ${error.message}` }, 500);
     }
   }
-  console.log("Upload completed, returning URLs:", urls2);
   return c.json({ urls: urls2 });
 });
 app.get("/api/users/me", async (c) => {
@@ -10911,9 +10844,8 @@ app.post("/api/conversations", async (c) => {
       return c.json({ message: "Listing not found" }, 404);
     const sellerId = listing[0].user_id;
     const existing = await sql`SELECT id FROM conversations WHERE listing_id = ${parseInt(listingId)} AND buyer_id = ${user.id} AND seller_id = ${sellerId}`;
-    if (existing.length) {
+    if (existing.length)
       return c.json({ id: String(existing[0].id) });
-    }
     const result = await sql`INSERT INTO conversations (listing_id, buyer_id, seller_id) VALUES (${parseInt(listingId)}, ${user.id}, ${sellerId}) RETURNING id`;
     return c.json({ id: String(result[0].id) });
   } catch (e) {
@@ -10966,12 +10898,7 @@ app.get("/api/conversations/:id/messages", async (c) => {
     const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(conversationId)} AND (buyer_id = ${user.id} OR seller_id = ${user.id})`;
     if (!conv.length)
       return c.json({ message: "Conversation not found" }, 404);
-    const rows = await sql`
-            SELECT id, conversation_id, sender_id, receiver_id, content, created_at
-            FROM messages 
-            WHERE conversation_id = ${parseInt(conversationId)}
-            ORDER BY created_at ASC
-        `;
+    const rows = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, created_at FROM messages WHERE conversation_id = ${parseInt(conversationId)} ORDER BY created_at ASC`;
     return c.json(rows.map((r) => ({
       id: String(r.id),
       conversation_id: String(r.conversation_id),
@@ -10992,11 +10919,7 @@ app.post("/api/messages", async (c) => {
     const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(conversationId)} AND (buyer_id = ${user.id} OR seller_id = ${user.id})`;
     if (!conv.length)
       return c.json({ message: "Conversation not found" }, 404);
-    const result = await sql`
-            INSERT INTO messages (conversation_id, sender_id, receiver_id, content)
-            VALUES (${parseInt(conversationId)}, ${user.id}, ${parseInt(receiverId)}, ${content})
-            RETURNING id, created_at
-        `;
+    const result = await sql`INSERT INTO messages (conversation_id, sender_id, receiver_id, content) VALUES (${parseInt(conversationId)}, ${user.id}, ${parseInt(receiverId)}, ${content}) RETURNING id, created_at`;
     return c.json({
       id: String(result[0].id),
       conversation_id: conversationId,
@@ -11058,7 +10981,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-EBMoQY/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-2juSwE/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -11093,7 +11016,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-EBMoQY/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-2juSwE/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

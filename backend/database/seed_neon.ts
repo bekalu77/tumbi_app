@@ -41,7 +41,10 @@ const INITIAL_LISTINGS = [
 ];
 
 async function seed() {
-    console.log('Connecting to Neon to seed data...');
+    console.log('Seeding is currently DISABLED to prevent accidental data wipes.');
+    console.log('Uncomment the code in backend/database/seed_neon.ts if you explicitly want to reset data.');
+    
+    /* 
     const client = await pool.connect();
     try {
         // Clear existing data (Optional: Uncomment if you want a clean start)
@@ -70,6 +73,7 @@ async function seed() {
         client.release();
         await pool.end();
     }
+    */
 }
 
 seed();
