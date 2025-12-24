@@ -13,39 +13,52 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
+        try {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
 
-        if (width > height) {
-          if (width > maxWidth) {
-            height *= maxWidth / width;
-            width = maxWidth;
+          if (width === 0 || height === 0) {
+            resolve(file);
+            return;
           }
-        } else {
-          if (height > maxHeight) {
-            width *= maxHeight / height;
-            height = maxHeight;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
           }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob((blob) => {
+            if (blob && blob.size > 0) {
+              const resizedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(resizedFile);
+            } else {
+              resolve(file);
+            }
+          }, 'image/jpeg', quality);
+        } catch (error) {
+          resolve(file);
         }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const resizedFile = new File([blob], file.name, {
-              type: 'image/jpeg',
-              lastModified: Date.now(),
-            });
-            resolve(resizedFile);
-          }
-        }, 'image/jpeg', quality);
       };
+      img.onerror = () => resolve(file);
       img.src = e.target?.result as string;
     };
+    reader.onerror = () => resolve(file);
     reader.readAsDataURL(file);
   });
 };
@@ -225,12 +238,13 @@ export const CategoryPill: React.FC<CategoryPillProps> = ({ category, isSelected
 // --- Add/Edit Listing Form (Updated Category Structure) ---
 interface AddListingProps {
   onClose: () => void;
-  onSubmit: (listingData: any, photos: File[]) => void; 
+  onSubmit: (listingData: any, imageUrls: string[]) => void; 
+  onUploadPhotos: (photos: File[]) => Promise<string[]>;
   initialData?: Listing;
   isSubmitting?: boolean;
 }
 
-export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = false }: AddListingProps) => {
+export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData, isSubmitting = false }: AddListingProps) => {
   const [formData, setFormData] = useState({
     title: '',
     price: '',
@@ -243,6 +257,9 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
   
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -268,6 +285,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
         });
         if (Array.isArray(initialData.imageUrls)) {
              setPhotoPreviews(initialData.imageUrls);
+             setUploadedUrls(initialData.imageUrls);
         }
     }
     return () => {
@@ -293,20 +311,41 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
         setPhotos(prev => [...prev, ...optimizedFiles]);
         const newPreviews = optimizedFiles.map(file => URL.createObjectURL(file));
         setPhotoPreviews(prev => [...prev, ...newPreviews]);
+
+        // Start uploading
+        setIsUploading(true);
+        setUploadProgress(10);
+        try {
+            const urls = await onUploadPhotos(optimizedFiles);
+            setUploadedUrls(prev => [...prev, ...urls]);
+            setUploadProgress(100);
+        } catch (error) {
+            alert(`Failed to upload photos: ${error}`);
+            // Remove the failed photos
+            setPhotos(prev => prev.slice(0, prev.length - optimizedFiles.length));
+            setPhotoPreviews(prev => prev.slice(0, prev.length - newPreviews.length));
+            newPreviews.forEach(url => URL.revokeObjectURL(url));
+        } finally {
+            setIsUploading(false);
+        }
     }
   };
 
   const removePhoto = (index: number) => {
-      setPhotos(prev => prev.filter((_, i) => i !== index));
       const previewToRemove = photoPreviews[index];
+      const isNewPhoto = previewToRemove.startsWith('blob:');
+      setPhotos(prev => prev.filter((_, i) => i !== index));
       setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
+      if (isNewPhoto) {
+          setUploadedUrls(prev => prev.filter((_, i) => i !== index));
+      }
       URL.revokeObjectURL(previewToRemove);
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting || (photoPreviews.length === 0 && photos.length === 0)) {
-        alert("Please upload at least one photo.");
+    if (isSubmitting || isUploading || uploadedUrls.length === 0) {
+        if (uploadedUrls.length === 0) alert("Please upload at least one photo.");
         return;
     };
 
@@ -326,7 +365,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
         description: formData.description,
     };
 
-    onSubmit(submissionData, photos);
+    onSubmit(submissionData, uploadedUrls);
   };
 
   const mainCategories = CATEGORIES.filter(c => c.slug !== 'all');
@@ -344,21 +383,29 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
             <div>
                  <label className="block text-sm font-medium text-gray-700 dark:text-dark-subtext mb-1 text-xs uppercase font-bold tracking-wider">Photos ({photoPreviews.length}/5)</label>
+                {isUploading && (
+                    <div className="mb-2">
+                        <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2">
+                            <div className="bg-tumbi-500 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Uploading photos...</p>
+                    </div>
+                )}
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     {photoPreviews.map((preview, index) => (
                         <div key={index} className="relative aspect-square border dark:border-dark-border rounded-lg overflow-hidden">
                             <img src={preview} alt={`Preview ${index}`} className="w-full h-full object-cover" />
-                            <button type="button" onClick={() => removePhoto(index)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-black/70"><XIcon className="w-3 h-3" /></button>
+                            <button type="button" onClick={() => removePhoto(index)} disabled={isUploading} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-black/70 disabled:opacity-50"><XIcon className="w-3 h-3" /></button>
                         </div>
                     ))}
                    {photoPreviews.length < 5 && (
-                        <div onClick={() => !isSubmitting && fileInputRef.current?.click()} className={`aspect-square border-2 border-dashed border-gray-300 dark:border-dark-border rounded-lg flex flex-col items-center justify-center text-gray-500 dark:text-dark-subtext cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card ${isSubmitting ? 'opacity-50 cursor-wait' : ''}`}>
+                        <div onClick={() => !isSubmitting && !isUploading && fileInputRef.current?.click()} className={`aspect-square border-2 border-dashed border-gray-300 dark:border-dark-border rounded-lg flex flex-col items-center justify-center text-gray-500 dark:text-dark-subtext cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card ${isSubmitting || isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                             <CameraIcon className="w-8 h-8 mb-1" />
                             <span className="text-xs text-center">Add Photo</span>
                         </div>
                    )}
                 </div>
-                <input type="file" multiple ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" disabled={isSubmitting || photoPreviews.length >= 5} />
+                <input type="file" multiple ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" disabled={isSubmitting || isUploading || photoPreviews.length >= 5} />
             </div>
              <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="What are you selling/offering?" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
              
@@ -405,7 +452,7 @@ export const AddListingForm = ({ onClose, onSubmit, initialData, isSubmitting = 
             </div>
 
             <div className="pt-2">
-                <button type="submit" disabled={isSubmitting} className={`w-full bg-tumbi-600 text-white font-bold py-4 rounded-lg flex justify-center items-center ${isSubmitting ? 'opacity-70' : 'hover:bg-tumbi-700'}`}>
+                <button type="submit" disabled={isSubmitting || isUploading} className={`w-full bg-tumbi-600 text-white font-bold py-4 rounded-lg flex justify-center items-center ${isSubmitting || isUploading ? 'opacity-70' : 'hover:bg-tumbi-700'}`}>
                     {isSubmitting ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : (initialData ? 'Update Ad' : 'Post Ad Now')}
                 </button>
             </div>
@@ -491,7 +538,7 @@ export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listin
     );
 };
 
-export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (session: ChatSession) => void }) => {
+export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: User, onOpenChat: (session: ChatSession) => void, onUnreadCountChange?: (count: number) => void }) => {
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
@@ -505,6 +552,9 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message);
                 setSessions(data);
+                // Calculate total unread messages
+                const totalUnread = data.reduce((sum: number, session: ChatSession) => sum + (session.unreadCount || 0), 0);
+                onUnreadCountChange?.(totalUnread);
             } catch (error) {
                 console.error("Failed to load conversations:", error);
             } finally {
@@ -512,7 +562,7 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
             }
         }
         loadConversations();
-    }, [user]);
+    }, [user, onUnreadCountChange]);
 
     if (loading) return <div className="p-10 text-center text-gray-400 dark:text-dark-subtext">Loading messages...</div>;
 
@@ -530,7 +580,33 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
                         sessions.map(session => (
                             <div 
                                 key={session.conversationId} 
-                                onClick={() => { if(window.innerWidth < 768) onOpenChat(session); else setSelectedSession(session); }} 
+                                onClick={async () => { 
+                                    // Mark as read
+                                    const token = localStorage.getItem('token');
+                                    if (token) {
+                                        try {
+                                            await fetch(`${API_URL}/api/conversations/${session.conversationId}/read`, { 
+                                                method: 'POST',
+                                                headers: { 'x-access-token': token } 
+                                            });
+                                            // Update local state to reflect read status
+                                            setSessions(prev => {
+                                                const updated = prev.map(s => 
+                                                    s.conversationId === session.conversationId 
+                                                        ? { ...s, unreadCount: 0 } 
+                                                        : s
+                                                );
+                                                // Recalculate total unread
+                                                const totalUnread = updated.reduce((sum: number, s: ChatSession) => sum + (s.unreadCount || 0), 0);
+                                                onUnreadCountChange?.(totalUnread);
+                                                return updated;
+                                            });
+                                        } catch (error) {
+                                            console.error("Failed to mark as read:", error);
+                                        }
+                                    }
+                                    if(window.innerWidth < 768) onOpenChat(session); else setSelectedSession(session); 
+                                }} 
                                 className={`p-4 border-b border-gray-50 dark:border-dark-border flex items-center space-x-3 cursor-pointer transition-colors ${selectedSession?.conversationId === session.conversationId ? 'bg-tumbi-50 dark:bg-tumbi-900/20' : 'hover:bg-gray-50 dark:hover:bg-dark-bg'}`}
                             >
                                 <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
@@ -538,7 +614,12 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-baseline">
-                                        <h3 className="font-bold text-sm dark:text-dark-text truncate pr-2">{session.otherUserName}</h3>
+                                        <div className="flex items-center space-x-2">
+                                            <h3 className="font-bold text-sm dark:text-dark-text truncate pr-2">{session.otherUserName}</h3>
+                                            {session.unreadCount && session.unreadCount > 0 && (
+                                                <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+                                            )}
+                                        </div>
                                         <span className="text-[10px] text-gray-400 whitespace-nowrap">{session.lastMessageDate ? new Date(session.lastMessageDate).toLocaleDateString() : ''}</span>
                                     </div>
                                     <p className="text-xs text-tumbi-600 dark:text-tumbi-400 font-medium truncate">{session.listingTitle}</p>
@@ -567,7 +648,7 @@ export const MessagesView = ({ user, onOpenChat }: { user: User, onOpenChat: (se
 
 export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode, onEditListing, onDeleteListing, onEditProfile }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean, onEditListing: (listing: Listing) => void, onDeleteListing: (id: string) => void, onEditProfile: () => void }) => {
     const [subPage, setSubPage] = useState<'main' | 'my-listings'>('main');
-    const myListings = listings.filter(l => l.sellerId === user.id);
+    const myListings = listings.filter(l => l.sellerId === String(user.id));
 
     if (subPage === 'my-listings') {
         return (
@@ -722,7 +803,7 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
 };
 
 export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdit, onChat }: { listing: Listing; onBack: () => void; isSaved: boolean; onToggleSave: (id: string) => void; user: User | null; onEdit: (listing: Listing) => void; onChat: (listing: Listing) => void; }) => {
-    const isOwner = user?.id === listing.sellerId;
+    const isOwner = user && String(user.id) === listing.sellerId;
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const imageUrls = Array.isArray(listing.imageUrls) ? listing.imageUrls : [];
 

@@ -8,6 +8,7 @@ import ThemeToggle from './components/ThemeToggle';
 
 // Use a stable API URL fallback
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
+console.log('Using API_URL:', API_URL);
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -39,6 +40,7 @@ export default function App() {
 
   // Chat State
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
+  const [totalUnreadMessages, setTotalUnreadMessages] = useState(0);
 
   const fetchListings = async () => {
     try {
@@ -70,6 +72,23 @@ export default function App() {
     }
   }
 
+  const fetchUnreadCount = async () => {
+    const token = localStorage.getItem('token');
+    if (!token || !user) return;
+    try {
+        const response = await fetch(`${API_URL}/api/conversations`, {
+            headers: { 'x-access-token': token }
+        });
+        if (response.ok) {
+            const conversations = await response.json();
+            const totalUnread = conversations.reduce((sum: number, conv: ChatSession) => sum + (conv.unreadCount || 0), 0);
+            setTotalUnreadMessages(totalUnread);
+        }
+    } catch (e) {
+        console.error("App: Failed to load unread count:", e);
+    }
+  }
+
   useEffect(() => {
     const initApp = async () => {
       const token = localStorage.getItem('token');
@@ -77,6 +96,7 @@ export default function App() {
       if (token && userData) {
         setUser(JSON.parse(userData));
         fetchSavedListings();
+        fetchUnreadCount();
       }
       setIsUserLoading(false);
       fetchListings();
@@ -92,6 +112,12 @@ export default function App() {
     };
     initApp();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchUnreadCount();
+    }
+  }, [user]);
 
   const toggleDarkMode = () => {
     setIsDarkMode(prev => {
@@ -159,6 +185,7 @@ export default function App() {
     setUser(data.user);
     setShowAuth(false);
     fetchSavedListings();
+    fetchUnreadCount();
   };
 
   const handleLogout = () => {
@@ -169,22 +196,26 @@ export default function App() {
     setViewState('home');
   };
 
-  const handleSaveListing = async (data: any, photos: File[]) => {
+  const uploadPhotos = async (photos: File[]): Promise<string[]> => {
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('Not authenticated');
+    const photoFormData = new FormData();
+    photos.forEach((photo) => {
+        photoFormData.append('photos', photo);
+    });
+    const uploadRes = await fetch(`${API_URL}/api/upload`, { method: 'POST', headers: { 'x-access-token': token }, body: photoFormData });
+    const uploadData = await uploadRes.json();
+    if (!uploadRes.ok) throw new Error(uploadData.message || 'Failed to upload images');
+    return uploadData.urls;
+  };
+
+  const handleSaveListing = async (data: any, imageUrls: string[]) => {
     setIsListingsLoading(true);
     const token = localStorage.getItem('token');
     if (!token) { handleLogout(); setShowAuth(true); setIsListingsLoading(false); return; }
     const isEditing = !!editingListing;
     try {
-        let imageUrls = isEditing ? editingListing.imageUrls : [];
-        if (photos.length > 0) {
-            const photoFormData = new FormData();
-            photos.forEach(photo => photoFormData.append('photos', photo));
-            const uploadRes = await fetch(`${API_URL}/api/upload`, { method: 'POST', headers: { 'x-access-token': token }, body: photoFormData });
-            const uploadData = await uploadRes.json();
-            if (!uploadRes.ok) throw new Error(uploadData.message || 'Failed to upload images');
-            imageUrls = uploadData.urls;
-        }
-        const listingData = { ...data, imageUrls };
+        const listingData = { ...data, imageUrls, type: data.listingType };
         const endpoint = isEditing ? `${API_URL}/api/listings/${editingListing.id}` : `${API_URL}/api/listings`;
         const method = isEditing ? 'PUT' : 'POST';
         const listingRes = await fetch(endpoint, { method, headers: { 'Content-Type': 'application/json', 'x-access-token': token }, body: JSON.stringify(listingData) });
@@ -227,7 +258,7 @@ export default function App() {
   const openChat = async (listing: Listing) => {
     const token = localStorage.getItem('token');
     if (!user || !token) { setShowAuth(true); return; }
-    if (user.id === listing.sellerId) { alert("You cannot start a chat about your own listing."); return; }
+    if (String(user.id) === listing.sellerId) { alert("You cannot start a chat about your own listing."); return; }
     try {
       const res = await fetch(`${API_URL}/api/conversations`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token }, body: JSON.stringify({ listingId: listing.id }) });
       const conversationData = await res.json();
@@ -292,7 +323,7 @@ export default function App() {
         {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleUpdateProfile} />}
         {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} />}
         {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === selectedListingId)!} onBack={() => setViewState('home')} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={startEditListing} onChat={openChat} />}
-        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} isSubmitting={isListingsLoading} />}
+        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isListingsLoading} />}
         
         {/* Header Section */}
         <header className="sticky top-0 z-30 bg-tumbi-500 dark:bg-dark-card shadow-md">
@@ -378,7 +409,7 @@ export default function App() {
         )}
 
         {viewState === 'saved' && user && <SavedView listings={listings} savedIds={savedListingIds} onOpen={openListing} onToggleSave={toggleSave} />}
-        {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} />}
+        {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} onUnreadCountChange={setTotalUnreadMessages} />}
         {viewState === 'profile' && user ? <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={startEditListing} onDeleteListing={(id) => { if(confirm('Delete this listing?')) fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => fetchListings())}} onEditProfile={() => setShowEditProfile(true)} /> : viewState === 'profile' && !user ? <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} /> : null}
 
         {/* Fixed Footer Navigation */}
@@ -395,8 +426,11 @@ export default function App() {
                         <PlusIcon className="w-7 h-7" />
                     </button>
                 </div>
-                <button onClick={() => checkAuthAndGo('messages')} className={`flex flex-col items-center justify-center w-full h-full ${viewState === 'messages' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>
+                <button onClick={() => checkAuthAndGo('messages')} className={`flex flex-col items-center justify-center w-full h-full relative ${viewState === 'messages' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>
                     <MessageCircleIcon className="w-6 h-6" />
+                    {totalUnreadMessages > 0 && (
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-white dark:border-dark-card"></div>
+                    )}
                 </button>
                 <button onClick={() => checkAuthAndGo('profile')} className={`flex flex-col items-center justify-center w-full h-full ${viewState === 'profile' || viewState === 'register' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>
                     <UserIcon className="w-6 h-6" />
