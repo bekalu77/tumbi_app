@@ -110,16 +110,14 @@ app.get('/api/listings', async (c) => {
         `;
         const params: any[] = [];
 
-        // Map Main Category to listing_type
         if (mainCategory && mainCategory !== 'all') {
             params.push(mainCategory);
-            query += ` AND l.listing_type = $${params.length}`;
+            query += ` AND l.main_category = $${params.length}`;
         }
 
-        // Map Sub Category to category_slug
         if (subCategory && subCategory !== 'all') {
             params.push(subCategory);
-            query += ` AND l.category_slug = $${params.length}`;
+            query += ` AND l.sub_category = $${params.length}`;
         }
 
         if (city && city !== 'All Cities') {
@@ -150,9 +148,8 @@ app.get('/api/listings', async (c) => {
             price: parseFloat(r.price),
             imageUrls: r.image_url ? r.image_url.split(',') : [],
             isVerified: !!r.is_verified,
-            // Map back to frontend names
-            mainCategory: r.listing_type,
-            subCategory: r.category_slug,
+            mainCategory: r.main_category,
+            subCategory: r.sub_category,
             createdAt: r.created_at || new Date(),
             sellerId: String(r.user_id)
         })));
@@ -164,17 +161,16 @@ app.post('/api/listings', async (c) => {
     const { title, price, unit, location, mainCategory, subCategory, description, imageUrls } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
-        // Map: mainCategory -> listing_type, subCategory -> category_slug
         const result = await sql`
-            INSERT INTO listings (title, price, unit, location, listing_type, category_slug, description, image_url, user_id)
+            INSERT INTO listings (title, price, unit, location, main_category, sub_category, description, image_url, user_id)
             VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageUrls.join(',')}, ${parseInt(user.id)})
             RETURNING *
         `;
         return c.json({ 
             ...result[0], 
             id: String(result[0].id),
-            mainCategory: result[0].listing_type,
-            subCategory: result[0].category_slug 
+            mainCategory: result[0].main_category,
+            subCategory: result[0].sub_category 
         });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
@@ -185,11 +181,10 @@ app.put('/api/listings/:id', async (c) => {
     const { title, price, unit, location, mainCategory, subCategory, description, imageUrls } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
-        // Map: mainCategory -> listing_type, subCategory -> category_slug
         const result = await sql`
             UPDATE listings SET 
                 title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
-                listing_type = ${mainCategory}, category_slug = ${subCategory}, 
+                main_category = ${mainCategory}, sub_category = ${subCategory}, 
                 description = ${description}, image_url = ${imageUrls.join(',')}
             WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)}
             RETURNING *
@@ -198,8 +193,8 @@ app.put('/api/listings/:id', async (c) => {
         return c.json({ 
             ...result[0], 
             id: String(result[0].id),
-            mainCategory: result[0].listing_type,
-            subCategory: result[0].category_slug 
+            mainCategory: result[0].main_category,
+            subCategory: result[0].sub_category 
         });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });

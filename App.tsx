@@ -101,7 +101,6 @@ export default function App() {
       if (clearExisting) {
         setListings(data);
       } else {
-        // Prevent duplicates on race conditions
         setListings(prev => {
             const existingIds = new Set(prev.map(l => l.id));
             const newItems = data.filter((l: Listing) => !existingIds.has(l.id));
@@ -147,13 +146,8 @@ export default function App() {
     return () => observer.disconnect();
   }, [loadMore, hasMore, isLoadingMore, isListingsLoading]);
 
-  // Apply filters triggers re-fetch
+  // Auto-apply filters when UI selects change
   useEffect(() => {
-    setOffset(0);
-    fetchListings(0, appliedFilters, true);
-  }, [appliedFilters]);
-
-  const handleApplyFilters = useCallback(() => {
     setAppliedFilters({
         search: searchInput,
         mainCategory: selectedMainCategory,
@@ -161,12 +155,17 @@ export default function App() {
         city: selectedCity,
         sortBy: sortBy
     });
-  }, [searchInput, selectedMainCategory, selectedSubCategory, selectedCity, sortBy]);
-
-  // Auto-apply filters when selects change
-  useEffect(() => {
-    handleApplyFilters();
   }, [selectedMainCategory, selectedSubCategory, selectedCity, sortBy]);
+
+  // Re-fetch when applied filters change
+  useEffect(() => {
+    setOffset(0);
+    fetchListings(0, appliedFilters, true);
+  }, [appliedFilters]);
+
+  const handleApplyFilters = () => {
+    setAppliedFilters(prev => ({ ...prev, search: searchInput }));
+  };
 
   const resetAllFilters = () => {
     setSelectedMainCategory('all');
@@ -457,16 +456,16 @@ export default function App() {
 
                 {viewState === 'home' && (
                     <div className="grid grid-cols-3 gap-2">
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}>
                             <option>All Cities</option>
                             {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>
                             {CATEGORIES.map(cat => (
                                 <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                             ))}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}>
                             <option value="all">Sub-Categories</option>
                             {selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (
                                 <option key={sub.value} value={sub.value}>{sub.label}</option>
