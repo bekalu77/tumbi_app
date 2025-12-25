@@ -1,5 +1,12 @@
--- Users Table
-CREATE TABLE IF NOT EXISTS users (
+-- 1. DROP EXISTING TABLES (RECREATE FROM SCRATCH)
+DROP TABLE IF EXISTS saved_listings CASCADE;
+DROP TABLE IF EXISTS messages CASCADE;
+DROP TABLE IF EXISTS conversations CASCADE;
+DROP TABLE IF EXISTS listings CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+-- 2. CREATE TABLES WITH NEW COLUMN NAMES
+CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -9,8 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Listings Table
-CREATE TABLE IF NOT EXISTS listings (
+CREATE TABLE listings (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
@@ -18,15 +24,14 @@ CREATE TABLE IF NOT EXISTS listings (
     price DECIMAL(12, 2) NOT NULL,
     unit VARCHAR(50),
     location VARCHAR(255),
-    main_category VARCHAR(100), -- Formerly listing_type
-    sub_category VARCHAR(100),  -- Formerly category_slug
+    main_category VARCHAR(100), 
+    sub_category VARCHAR(100),  
     image_url TEXT,
     is_verified BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Conversations Table
-CREATE TABLE IF NOT EXISTS conversations (
+CREATE TABLE conversations (
     id SERIAL PRIMARY KEY,
     listing_id INTEGER REFERENCES listings(id) ON DELETE CASCADE,
     buyer_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -35,8 +40,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     UNIQUE(listing_id, buyer_id, seller_id)
 );
 
--- Messages Table
-CREATE TABLE IF NOT EXISTS messages (
+CREATE TABLE messages (
     id SERIAL PRIMARY KEY,
     conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
     sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -45,22 +49,8 @@ CREATE TABLE IF NOT EXISTS messages (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Saved Listings Table
-CREATE TABLE IF NOT EXISTS saved_listings (
+CREATE TABLE saved_listings (
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     listing_id INTEGER REFERENCES listings(id) ON DELETE CASCADE,
     PRIMARY KEY (user_id, listing_id)
 );
-
--- Migration Helper (Safe to run if columns exist or not)
--- This ensures existing tables are updated to the new naming convention without wiping data
-DO $$ 
-BEGIN 
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='listing_type') THEN
-        ALTER TABLE listings RENAME COLUMN listing_type TO main_category;
-    END IF;
-    
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='category_slug') THEN
-        ALTER TABLE listings RENAME COLUMN category_slug TO sub_category;
-    END IF;
-END $$;
