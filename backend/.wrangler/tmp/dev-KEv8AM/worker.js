@@ -34,7 +34,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// .wrangler/tmp/bundle-81i2gA/checked-fetch.js
+// .wrangler/tmp/bundle-i24bhu/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -52,7 +52,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-81i2gA/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-i24bhu/checked-fetch.js"() {
     "use strict";
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
@@ -1910,11 +1910,11 @@ var require_bcrypt = __commonJS({
   }
 });
 
-// .wrangler/tmp/bundle-81i2gA/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-i24bhu/middleware-loader.entry.ts
 init_checked_fetch();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-81i2gA/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-i24bhu/middleware-insertion-facade.js
 init_checked_fetch();
 init_modules_watch_stub();
 
@@ -10457,7 +10457,8 @@ app.get("/api/listings", async (c) => {
   const sql = Ys(c.env.DATABASE_URL);
   const limit = parseInt(c.req.query("limit") || "20");
   const offset = parseInt(c.req.query("offset") || "0");
-  const category = c.req.query("category");
+  const mainCategory = c.req.query("mainCategory");
+  const subCategory = c.req.query("subCategory");
   const city = c.req.query("city");
   const search = c.req.query("search");
   const sortBy = c.req.query("sortBy") || "date-desc";
@@ -10469,9 +10470,13 @@ app.get("/api/listings", async (c) => {
             WHERE 1=1
         `;
     const params = [];
-    if (category && category !== "all") {
-      params.push(category);
-      query += ` AND (l.main_category = $${params.length} OR l.sub_category = $${params.length})`;
+    if (mainCategory && mainCategory !== "all") {
+      params.push(mainCategory);
+      query += ` AND l.listing_type = $${params.length}`;
+    }
+    if (subCategory && subCategory !== "all") {
+      params.push(subCategory);
+      query += ` AND l.category_slug = $${params.length}`;
     }
     if (city && city !== "All Cities") {
       params.push(city);
@@ -10496,8 +10501,9 @@ app.get("/api/listings", async (c) => {
       price: parseFloat(r.price),
       imageUrls: r.image_url ? r.image_url.split(",") : [],
       isVerified: !!r.is_verified,
-      mainCategory: r.main_category,
-      subCategory: r.sub_category,
+      // Map back to frontend names
+      mainCategory: r.listing_type,
+      subCategory: r.category_slug,
       createdAt: r.created_at || /* @__PURE__ */ new Date(),
       sellerId: String(r.user_id)
     })));
@@ -10511,11 +10517,16 @@ app.post("/api/listings", async (c) => {
   const sql = Ys(c.env.DATABASE_URL);
   try {
     const result = await sql`
-            INSERT INTO listings (title, price, unit, location, main_category, sub_category, description, image_url, user_id)
+            INSERT INTO listings (title, price, unit, location, listing_type, category_slug, description, image_url, user_id)
             VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageUrls.join(",")}, ${parseInt(user.id)})
             RETURNING *
         `;
-    return c.json({ ...result[0], id: String(result[0].id) });
+    return c.json({
+      ...result[0],
+      id: String(result[0].id),
+      mainCategory: result[0].listing_type,
+      subCategory: result[0].category_slug
+    });
   } catch (e) {
     return c.json({ message: e.message }, 500);
   }
@@ -10529,13 +10540,18 @@ app.put("/api/listings/:id", async (c) => {
     const result = await sql`
             UPDATE listings SET 
                 title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
-                main_category = ${mainCategory}, sub_category = ${subCategory}, 
+                listing_type = ${mainCategory}, category_slug = ${subCategory}, 
                 description = ${description}, image_url = ${imageUrls.join(",")}
             WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)}
             RETURNING *
         `;
     if (!result.length) return c.json({ message: "Listing not found or not authorized" }, 404);
-    return c.json({ ...result[0], id: String(result[0].id) });
+    return c.json({
+      ...result[0],
+      id: String(result[0].id),
+      mainCategory: result[0].listing_type,
+      subCategory: result[0].category_slug
+    });
   } catch (e) {
     return c.json({ message: e.message }, 500);
   }
@@ -10762,7 +10778,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-81i2gA/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-i24bhu/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -10796,7 +10812,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-81i2gA/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-i24bhu/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

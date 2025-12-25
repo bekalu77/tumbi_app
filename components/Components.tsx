@@ -63,6 +63,16 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
   });
 };
 
+// Helper to get labels from slugs
+const getCategoryLabel = (mainSlug: string, subValue: string) => {
+    const main = CATEGORIES.find(c => c.slug === mainSlug);
+    const sub = SUB_CATEGORIES[mainSlug]?.find(s => s.value === subValue);
+    return {
+        mainLabel: main?.name || mainSlug,
+        subLabel: sub?.label || subValue
+    };
+};
+
 // --- Auth Modal (Desktop Optimized Floating Modal) ---
 export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onAuthSuccess: (data: { auth: boolean, token: string, user: User }) => void }) => {
     const [isRegister, setIsRegister] = useState(false);
@@ -192,6 +202,8 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
         ? listing.imageUrls[0]
         : 'https://picsum.photos/400/300?random=42';
 
+    const { mainLabel, subLabel } = getCategoryLabel(listing.mainCategory, listing.subCategory);
+
   return (
     <div onClick={onClick} className="mb-3 break-inside-avoid cursor-pointer relative group">
       <div className="bg-white dark:bg-dark-card rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
@@ -219,12 +231,15 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
         <div className="p-3">
           <h3 className="font-normal text-sm text-gray-800 dark:text-dark-text line-clamp-2">{listing.title}</h3>
           <p className="text-base font-bold text-tumbi-600 dark:text-tumbi-400 mt-1">ETB {listing.price.toLocaleString()}</p>
-          <div className="text-xs text-gray-500 dark:text-dark-subtext mt-2 space-y-1">
+          <div className="text-[10px] text-gray-500 dark:text-dark-subtext mt-2 space-y-1">
             <div className="flex items-center">
                 <MapPinIcon className="w-3 h-3 mr-1" />
                 <span className="truncate">{listing.location}</span>
             </div>
-            <p className="opacity-70 truncate uppercase text-[9px] font-bold text-tumbi-500">{listing.subCategory}</p>
+            <div className="flex flex-wrap gap-1 mt-1">
+                <span className="bg-gray-100 dark:bg-dark-border px-1.5 py-0.5 rounded text-[8px] uppercase font-bold text-gray-600 dark:text-dark-subtext">{mainLabel}</span>
+                <span className="bg-tumbi-50 dark:bg-tumbi-900/30 px-1.5 py-0.5 rounded text-[8px] uppercase font-bold text-tumbi-600 dark:text-tumbi-400 truncate max-w-[80px]">{subLabel}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -902,6 +917,8 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
     const goToNext = () => setCurrentImageIndex(prev => (prev + 1) % imageUrls.length);
     const goToPrev = () => setCurrentImageIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length);
 
+    const { mainLabel, subLabel } = getCategoryLabel(listing.mainCategory, listing.subCategory);
+
     return (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200 backdrop-blur-sm">
             <div className="bg-white dark:bg-dark-bg w-full max-w-4xl max-h-[95vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative">
@@ -928,7 +945,10 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <span className="px-2 py-1 bg-tumbi-100 dark:bg-tumbi-900/30 text-tumbi-700 dark:text-tumbi-300 text-[10px] font-bold uppercase rounded tracking-wider">{listing.subCategory}</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <span className="px-2 py-1 bg-gray-100 dark:bg-dark-border text-gray-600 dark:text-dark-subtext text-[9px] font-bold uppercase rounded tracking-wider">{mainLabel}</span>
+                                    <span className="px-2 py-1 bg-tumbi-100 dark:bg-tumbi-900/30 text-tumbi-700 dark:text-tumbi-300 text-[9px] font-bold uppercase rounded tracking-wider">{subLabel}</span>
+                                </div>
                                 <button onClick={() => onToggleSave(String(listing.id))} className={`p-2 rounded-full transition-colors ${isSaved ? 'bg-tumbi-50 text-tumbi-600' : 'hover:bg-gray-100 text-gray-400'}`}>
                                     <BookmarkIcon className="w-6 h-6" filled={isSaved} />
                                 </button>

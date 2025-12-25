@@ -26,17 +26,18 @@ export default function App() {
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
 
-  // Filter UI State
+  // Filter UI State (Immediate responsive UI)
   const [selectedMainCategory, setSelectedMainCategory] = useState('all');
   const [selectedSubCategory, setSelectedSubCategory] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [selectedCity, setSelectedCity] = useState('All Cities');
   const [sortBy, setSortBy] = useState('date-desc');
   
-  // Active Filter state (Triggers re-fetch)
+  // Applied Filter state (Triggers re-fetch from server)
   const [appliedFilters, setAppliedFilters] = useState({
     search: '',
-    category: 'all',
+    mainCategory: 'all',
+    subCategory: 'all',
     city: 'All Cities',
     sortBy: 'date-desc'
   });
@@ -59,29 +60,19 @@ export default function App() {
   // Cache clearing logic on app start
   useEffect(() => {
     if (!hasClearedCache.current) {
-        // Clear browser/WebView caches (Storage, Cookies, etc. that might be stale)
-        // We keep 'token' and 'user' for persistent login, but could clear others
         const persistentKeys = ['token', 'user', 'theme'];
-        
-        // Remove all other keys from localStorage
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key && !persistentKeys.includes(key)) {
                 localStorage.removeItem(key);
             }
         }
-
-        // Clear session storage completely
         sessionStorage.clear();
-
-        // If using Cache API (for images/requests)
         if ('caches' in window) {
             caches.keys().then((names) => {
                 for (let name of names) caches.delete(name);
             });
         }
-
-        console.log("App Restart: Temporary caches cleared.");
         hasClearedCache.current = true;
     }
   }, []);
@@ -94,14 +85,14 @@ export default function App() {
       const params = new URLSearchParams({
         limit: PAGE_SIZE.toString(),
         offset: currentOffset.toString(),
-        category: filters.category,
+        mainCategory: filters.mainCategory,
+        subCategory: filters.subCategory,
         city: filters.city,
         search: filters.search,
         sortBy: filters.sortBy
       });
 
       const response = await fetch(`${API_URL}/api/listings?${params}`, {
-        // Force no-cache for fresh data after restart
         cache: 'no-store'
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -110,7 +101,12 @@ export default function App() {
       if (clearExisting) {
         setListings(data);
       } else {
-        setListings(prev => [...prev, ...data]);
+        // Prevent duplicates on race conditions
+        setListings(prev => {
+            const existingIds = new Set(prev.map(l => l.id));
+            const newItems = data.filter((l: Listing) => !existingIds.has(l.id));
+            return [...prev, ...newItems];
+        });
       }
       
       setHasMore(data.length === PAGE_SIZE);
@@ -151,20 +147,26 @@ export default function App() {
     return () => observer.disconnect();
   }, [loadMore, hasMore, isLoadingMore, isListingsLoading]);
 
-  // Update filters and reset list
+  // Apply filters triggers re-fetch
   useEffect(() => {
     setOffset(0);
     fetchListings(0, appliedFilters, true);
   }, [appliedFilters]);
 
-  const handleApplyFilters = () => {
+  const handleApplyFilters = useCallback(() => {
     setAppliedFilters({
         search: searchInput,
-        category: selectedSubCategory !== 'all' ? selectedSubCategory : selectedMainCategory,
+        mainCategory: selectedMainCategory,
+        subCategory: selectedSubCategory,
         city: selectedCity,
         sortBy: sortBy
     });
-  };
+  }, [searchInput, selectedMainCategory, selectedSubCategory, selectedCity, sortBy]);
+
+  // Auto-apply filters when selects change
+  useEffect(() => {
+    handleApplyFilters();
+  }, [selectedMainCategory, selectedSubCategory, selectedCity, sortBy]);
 
   const resetAllFilters = () => {
     setSelectedMainCategory('all');
@@ -174,7 +176,8 @@ export default function App() {
     setSortBy('date-desc');
     setAppliedFilters({
         search: '',
-        category: 'all',
+        mainCategory: 'all',
+        subCategory: 'all',
         city: 'All Cities',
         sortBy: 'date-desc'
     });
@@ -316,7 +319,7 @@ export default function App() {
     if (!token) { handleLogout(); setShowAuth(true); setIsListingsLoading(false); return; }
     const isEditing = !!editingListing;
     try {
-        const listingData = { ...data, imageUrls, type: data.listingType };
+        const listingData = { ...data, imageUrls };
         const endpoint = isEditing ? `${API_URL}/api/listings/${editingListing.id}` : `${API_URL}/api/listings`;
         const method = isEditing ? 'PUT' : 'POST';
         const listingRes = await fetch(endpoint, { method, headers: { 'Content-Type': 'application/json', 'x-access-token': token }, body: JSON.stringify(listingData) });
@@ -454,16 +457,16 @@ export default function App() {
 
                 {viewState === 'home' && (
                     <div className="grid grid-cols-3 gap-2">
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCity} onChange={e => { setSelectedCity(e.target.value); setTimeout(handleApplyFilters, 0); }}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}>
                             <option>All Cities</option>
                             {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); setTimeout(handleApplyFilters, 0); }}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>
                             {CATEGORIES.map(cat => (
                                 <option key={cat.slug} value={cat.slug}>{cat.name}</option>
                             ))}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedSubCategory} onChange={e => { setSelectedSubCategory(e.target.value); setTimeout(handleApplyFilters, 0); }}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}>
                             <option value="all">Sub-Categories</option>
                             {selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (
                                 <option key={sub.value} value={sub.value}>{sub.label}</option>
@@ -480,7 +483,7 @@ export default function App() {
                     <div className="mb-6 flex justify-end">
                         <div className="flex items-center bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg px-3 h-10 shadow-sm">
                             <span className="mr-2 text-xs font-bold text-gray-500 dark:text-dark-subtext">Sort by:</span>
-                            <select className="bg-transparent border-none outline-none text-gray-900 dark:text-dark-text text-xs font-bold p-0 focus:ring-0 cursor-pointer" value={sortBy} onChange={e => { setSortBy(e.target.value); setTimeout(handleApplyFilters, 0); }}>
+                            <select className="bg-transparent border-none outline-none text-gray-900 dark:text-dark-text text-xs font-bold p-0 focus:ring-0 cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
                                 <option value="date-desc">Newest</option>
                                 <option value="date-asc">Oldest</option>
                                 <option value="price-asc">Price: Low-High</option>

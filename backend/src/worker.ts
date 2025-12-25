@@ -95,7 +95,8 @@ app.get('/api/listings', async (c) => {
     const sql = neon(c.env.DATABASE_URL);
     const limit = parseInt(c.req.query('limit') || '20');
     const offset = parseInt(c.req.query('offset') || '0');
-    const category = c.req.query('category');
+    const mainCategory = c.req.query('mainCategory');
+    const subCategory = c.req.query('subCategory');
     const city = c.req.query('city');
     const search = c.req.query('search');
     const sortBy = c.req.query('sortBy') || 'date-desc';
@@ -109,9 +110,16 @@ app.get('/api/listings', async (c) => {
         `;
         const params: any[] = [];
 
-        if (category && category !== 'all') {
-            params.push(category);
-            query += ` AND (l.main_category = $${params.length} OR l.sub_category = $${params.length})`;
+        // Map Main Category to listing_type
+        if (mainCategory && mainCategory !== 'all') {
+            params.push(mainCategory);
+            query += ` AND l.listing_type = $${params.length}`;
+        }
+
+        // Map Sub Category to category_slug
+        if (subCategory && subCategory !== 'all') {
+            params.push(subCategory);
+            query += ` AND l.category_slug = $${params.length}`;
         }
 
         if (city && city !== 'All Cities') {
@@ -124,11 +132,10 @@ app.get('/api/listings', async (c) => {
             query += ` AND (LOWER(l.title) LIKE $${params.length} OR LOWER(l.description) LIKE $${params.length})`;
         }
 
-        // Using c.id if created_at is missing, but typically listings has created_at
         if (sortBy === 'price-asc') query += ` ORDER BY l.price ASC`;
         else if (sortBy === 'price-desc') query += ` ORDER BY l.price DESC`;
-        else if (sortBy === 'date-asc') query += ` ORDER BY l.id ASC`; // Safe fallback
-        else query += ` ORDER BY l.id DESC`; // Safe fallback
+        else if (sortBy === 'date-asc') query += ` ORDER BY l.id ASC`; 
+        else query += ` ORDER BY l.id DESC`; 
 
         params.push(limit);
         query += ` LIMIT $${params.length}`;
@@ -143,8 +150,9 @@ app.get('/api/listings', async (c) => {
             price: parseFloat(r.price),
             imageUrls: r.image_url ? r.image_url.split(',') : [],
             isVerified: !!r.is_verified,
-            mainCategory: r.main_category,
-            subCategory: r.sub_category,
+            // Map back to frontend names
+            mainCategory: r.listing_type,
+            subCategory: r.category_slug,
             createdAt: r.created_at || new Date(),
             sellerId: String(r.user_id)
         })));
@@ -156,12 +164,18 @@ app.post('/api/listings', async (c) => {
     const { title, price, unit, location, mainCategory, subCategory, description, imageUrls } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
+        // Map: mainCategory -> listing_type, subCategory -> category_slug
         const result = await sql`
-            INSERT INTO listings (title, price, unit, location, main_category, sub_category, description, image_url, user_id)
+            INSERT INTO listings (title, price, unit, location, listing_type, category_slug, description, image_url, user_id)
             VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageUrls.join(',')}, ${parseInt(user.id)})
             RETURNING *
         `;
-        return c.json({ ...result[0], id: String(result[0].id) });
+        return c.json({ 
+            ...result[0], 
+            id: String(result[0].id),
+            mainCategory: result[0].listing_type,
+            subCategory: result[0].category_slug 
+        });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
@@ -171,16 +185,22 @@ app.put('/api/listings/:id', async (c) => {
     const { title, price, unit, location, mainCategory, subCategory, description, imageUrls } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     try {
+        // Map: mainCategory -> listing_type, subCategory -> category_slug
         const result = await sql`
             UPDATE listings SET 
                 title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
-                main_category = ${mainCategory}, sub_category = ${subCategory}, 
+                listing_type = ${mainCategory}, category_slug = ${subCategory}, 
                 description = ${description}, image_url = ${imageUrls.join(',')}
             WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)}
             RETURNING *
         `;
         if (!result.length) return c.json({ message: 'Listing not found or not authorized' }, 404);
-        return c.json({ ...result[0], id: String(result[0].id) });
+        return c.json({ 
+            ...result[0], 
+            id: String(result[0].id),
+            mainCategory: result[0].listing_type,
+            subCategory: result[0].category_slug 
+        });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
