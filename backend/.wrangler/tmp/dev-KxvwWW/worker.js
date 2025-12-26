@@ -34,7 +34,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// .wrangler/tmp/bundle-FM2Mt5/checked-fetch.js
+// .wrangler/tmp/bundle-LRwejF/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -52,7 +52,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-FM2Mt5/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-LRwejF/checked-fetch.js"() {
     "use strict";
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
@@ -1910,11 +1910,11 @@ var require_bcrypt = __commonJS({
   }
 });
 
-// .wrangler/tmp/bundle-FM2Mt5/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-LRwejF/middleware-loader.entry.ts
 init_checked_fetch();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-FM2Mt5/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-LRwejF/middleware-insertion-facade.js
 init_checked_fetch();
 init_modules_watch_stub();
 
@@ -10418,68 +10418,216 @@ app.use("/*", cors({
   allowHeaders: ["Content-Type", "x-access-token", "Authorization"],
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
-app.post("/api/register", async (c) => {
+app.onError((err, c) => {
+  console.error(`Error: ${err.message}`);
+  return c.json({ message: err.message || "Internal Server Error" }, 500);
+});
+app.use("/api/*", async (c, next) => {
+  const path = c.req.path;
+  const method = c.req.method;
+  const isPublic = path === "/api/register" && method === "POST" || path === "/api/login" && method === "POST" || path === "/api/listings" && method === "GET" || path.match(/^\/api\/listings\/\d+$/) && method === "GET" || method === "OPTIONS";
+  if (isPublic) return await next();
+  const authHeader = c.req.header("x-access-token");
+  if (!authHeader) return c.json({ message: "No token provided" }, 401);
   try {
-    const { name, email, phone, password, location } = await c.req.json();
+    const decoded = await verify2(authHeader, c.env.JWT_SECRET);
     const sql = Ys(c.env.DATABASE_URL);
-    const normPhone = normalizePhoneForStorage(phone);
-    const variants = getLoginVariants(phone);
-    const cleanEmail = email ? String(email).trim().toLowerCase() : null;
-    const existing = await sql`
-            SELECT id FROM users 
-            WHERE phone = ANY(${variants})
-               OR phone = ${normPhone}
-               ${cleanEmail ? sql`OR LOWER(email) = ${cleanEmail}` : sql``}
-        `;
-    if (existing.length) return c.json({ message: "Account already exists" }, 409);
-    const hashedPassword = await import_bcryptjs.default.hash(String(password).trim(), 8);
-    const result = await sql`
-            INSERT INTO users (name, email, phone, password, location) 
-            VALUES (${name}, ${cleanEmail}, ${normPhone}, ${hashedPassword}, ${location}) 
-            RETURNING id
-        `;
-    const token = await sign2({ id: String(result[0].id) }, c.env.JWT_SECRET);
-    return c.json({ auth: true, token, user: { id: String(result[0].id), name, email: cleanEmail, phone: normPhone, location } });
-  } catch (e) {
-    return c.json({ message: e.message }, 500);
+    const users = await sql`SELECT id, name, email, phone, location FROM users WHERE id = ${parseInt(decoded.id)}`;
+    if (!users.length) return c.json({ message: "User not found" }, 401);
+    c.set("user", { ...users[0], id: String(users[0].id) });
+    return await next();
+  } catch (err) {
+    return c.json({ message: "Invalid session" }, 401);
   }
 });
+app.get("/health", (c) => c.text("OK"));
+app.post("/api/register", async (c) => {
+  const { name, email, phone, password, location } = await c.req.json();
+  const sql = Ys(c.env.DATABASE_URL);
+  const normPhone = normalizePhoneForStorage(phone);
+  const variants = getLoginVariants(phone);
+  const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+  const existing = await sql`SELECT id FROM users WHERE phone = ANY(${variants}) OR phone = ${normPhone} ${cleanEmail ? sql`OR LOWER(email) = ${cleanEmail}` : sql``}`;
+  if (existing.length) return c.json({ message: "Account already exists" }, 409);
+  const hashedPassword = await import_bcryptjs.default.hash(String(password).trim(), 8);
+  const result = await sql`INSERT INTO users (name, email, phone, password, location) VALUES (${name}, ${cleanEmail}, ${normPhone}, ${hashedPassword}, ${location}) RETURNING id`;
+  const token = await sign2({ id: String(result[0].id) }, c.env.JWT_SECRET);
+  return c.json({ auth: true, token, user: { id: String(result[0].id), name, email: cleanEmail, phone: normPhone, location } });
+});
 app.post("/api/login", async (c) => {
-  try {
-    const body = await c.req.json();
-    const password = String(body.password || "").trim();
-    const input = String(body.identifier || body.email || body.phone || "").trim();
-    if (!input || !password) return c.json({ message: "Missing credentials" }, 400);
-    const sql = Ys(c.env.DATABASE_URL);
-    const variants = getLoginVariants(input);
-    const rows = await sql`
-            SELECT * FROM users 
-            WHERE (email IS NOT NULL AND LOWER(email) = LOWER(${input})) 
-               OR phone = ANY(${variants})
-        `;
-    if (rows.length === 0) {
-      return c.json({ message: "User not found. Please check your email/phone." }, 401);
-    }
-    const user = rows[0];
-    const isMatch = await import_bcryptjs.default.compare(password, user.password);
-    if (!isMatch) {
-      return c.json({ message: "Incorrect password. Try again." }, 401);
-    }
-    const token = await sign2({ id: String(user.id) }, c.env.JWT_SECRET);
-    const { password: _2, ...userData } = user;
-    return c.json({ auth: true, token, user: { ...userData, id: String(userData.id) } });
-  } catch (e) {
-    return c.json({ message: e.message }, 500);
-  }
+  const body = await c.req.json();
+  const password = String(body.password || "").trim();
+  const input = String(body.identifier || body.email || body.phone || "").trim();
+  if (!input || !password) return c.json({ message: "Missing credentials" }, 400);
+  const sql = Ys(c.env.DATABASE_URL);
+  const variants = getLoginVariants(input);
+  const rows = await sql`SELECT * FROM users WHERE (email IS NOT NULL AND LOWER(email) = LOWER(${input})) OR phone = ANY(${variants})`;
+  if (rows.length === 0) return c.json({ message: "User not found" }, 401);
+  const user = rows[0];
+  if (!await import_bcryptjs.default.compare(password, user.password)) return c.json({ message: "Incorrect password" }, 401);
+  const token = await sign2({ id: String(user.id) }, c.env.JWT_SECRET);
+  const { password: _2, ...userData } = user;
+  return c.json({ auth: true, token, user: { ...userData, id: String(userData.id) } });
 });
 app.get("/api/listings", async (c) => {
   const sql = Ys(c.env.DATABASE_URL);
-  try {
-    const rows = await sql`SELECT l.*, u.name as "sellerName", u.phone as "sellerPhone" FROM listings l LEFT JOIN users u ON l.user_id = u.id ORDER BY created_at DESC`;
-    return c.json(rows.map((r) => ({ ...r, id: String(r.id), price: parseFloat(r.price), imageUrls: r.image_url ? r.image_url.split(",") : [], sellerId: String(r.user_id) })));
-  } catch (e) {
-    return c.json({ message: e.message }, 500);
+  const limit = parseInt(c.req.query("limit") || "20");
+  const offset = parseInt(c.req.query("offset") || "0");
+  const mainCategory = c.req.query("mainCategory");
+  const subCategory = c.req.query("subCategory");
+  const city = c.req.query("city");
+  const search = c.req.query("search");
+  const sortBy = c.req.query("sortBy") || "date-desc";
+  let query = `SELECT l.*, u.name as "sellerName", u.phone as "sellerPhone" FROM listings l LEFT JOIN users u ON l.user_id = u.id WHERE 1=1`;
+  const params = [];
+  if (mainCategory && mainCategory !== "all") {
+    params.push(mainCategory);
+    query += ` AND l.main_category = $${params.length}`;
   }
+  if (subCategory && subCategory !== "all") {
+    params.push(subCategory);
+    query += ` AND l.sub_category = $${params.length}`;
+  }
+  if (city && city !== "All Cities") {
+    params.push(city);
+    query += ` AND l.location = $${params.length}`;
+  }
+  if (search) {
+    params.push(`%${search.toLowerCase()}%`);
+    query += ` AND (LOWER(l.title) LIKE $${params.length} OR LOWER(l.description) LIKE $${params.length})`;
+  }
+  if (sortBy === "price-asc") query += ` ORDER BY l.price ASC`;
+  else if (sortBy === "price-desc") query += ` ORDER BY l.price DESC`;
+  else if (sortBy === "date-asc") query += ` ORDER BY l.id ASC`;
+  else query += ` ORDER BY l.id DESC`;
+  params.push(limit);
+  query += ` LIMIT $${params.length}`;
+  params.push(offset);
+  query += ` OFFSET $${params.length}`;
+  const rows = await sql(query, params);
+  return c.json(rows.map((r) => ({ ...r, id: String(r.id), price: parseFloat(r.price), imageUrls: r.image_url ? r.image_url.split(",") : [], sellerId: String(r.user_id) })));
+});
+app.get("/api/listings/:id", async (c) => {
+  const id = c.req.param("id");
+  const sql = Ys(c.env.DATABASE_URL);
+  const rows = await sql`SELECT l.*, u.name as "sellerName", u.phone as "sellerPhone" FROM listings l LEFT JOIN users u ON l.user_id = u.id WHERE l.id = ${parseInt(id)}`;
+  if (!rows.length) return c.json({ message: "Listing not found" }, 404);
+  const r = rows[0];
+  return c.json({ ...r, id: String(r.id), price: parseFloat(r.price), imageUrls: r.image_url ? r.image_url.split(",") : [], sellerId: String(r.user_id) });
+});
+app.post("/api/listings", async (c) => {
+  const user = c.get("user");
+  const { title, price, unit, location, mainCategory, subCategory, description, imageUrls } = await c.req.json();
+  const sql = Ys(c.env.DATABASE_URL);
+  const result = await sql`INSERT INTO listings (title, price, unit, location, main_category, sub_category, description, image_url, user_id) VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageUrls.join(",")}, ${parseInt(user.id)}) RETURNING *`;
+  return c.json({ ...result[0], id: String(result[0].id) });
+});
+app.put("/api/listings/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const { title, price, unit, location, mainCategory, subCategory, description, imageUrls } = await c.req.json();
+  const sql = Ys(c.env.DATABASE_URL);
+  const result = await sql`UPDATE listings SET title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, main_category = ${mainCategory}, sub_category = ${subCategory}, description = ${description}, image_url = ${imageUrls.join(",")} WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} RETURNING *`;
+  if (!result.length) return c.json({ message: "Not authorized" }, 403);
+  return c.json({ ...result[0], id: String(result[0].id) });
+});
+app.delete("/api/listings/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const sql = Ys(c.env.DATABASE_URL);
+  const result = await sql`DELETE FROM listings WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} RETURNING id`;
+  if (!result.length) return c.json({ message: "Not authorized" }, 403);
+  return c.json({ message: "Deleted" });
+});
+app.get("/api/saved", async (c) => {
+  const user = c.get("user");
+  const sql = Ys(c.env.DATABASE_URL);
+  const rows = await sql`SELECT listing_id FROM saved_listings WHERE user_id = ${parseInt(user.id)}`;
+  return c.json(rows.map((r) => String(r.listing_id)));
+});
+app.post("/api/saved/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const sql = Ys(c.env.DATABASE_URL);
+  await sql`INSERT INTO saved_listings (user_id, listing_id) VALUES (${parseInt(user.id)}, ${parseInt(id)}) ON CONFLICT DO NOTHING`;
+  return c.json({ message: "Saved" });
+});
+app.delete("/api/saved/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const sql = Ys(c.env.DATABASE_URL);
+  await sql`DELETE FROM saved_listings WHERE user_id = ${parseInt(user.id)} AND listing_id = ${parseInt(id)}`;
+  return c.json({ message: "Unsaved" });
+});
+app.get("/api/users/me", async (c) => c.json(c.get("user")));
+app.put("/api/users/me", async (c) => {
+  const user = c.get("user");
+  const { name, email, location } = await c.req.json();
+  const sql = Ys(c.env.DATABASE_URL);
+  const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${parseInt(user.id)}`;
+  if (existing.length) return c.json({ message: "Email in use" }, 409);
+  await sql`UPDATE users SET name = ${name}, email = ${email}, location = ${location} WHERE id = ${parseInt(user.id)}`;
+  return c.json({ message: "Updated" });
+});
+app.post("/api/upload", async (c) => {
+  const user = c.get("user");
+  const formData = await c.req.formData();
+  const files = formData.getAll("photos");
+  if (!files || files.length === 0) return c.json({ message: "No files" }, 400);
+  const urls2 = [];
+  for (const f of files) {
+    if (!(f instanceof File)) continue;
+    const key = `${user.id}-${Date.now()}-${f.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    await c.env.R2_BUCKET.put(key, f, { httpMetadata: { contentType: f.type } });
+    urls2.push(`https://pub-f4faac6ec4e94df08e2c56afbf983bf1.r2.dev/${key}`);
+  }
+  return c.json({ urls: urls2 });
+});
+app.post("/api/conversations", async (c) => {
+  const user = c.get("user");
+  const { listingId } = await c.req.json();
+  const sql = Ys(c.env.DATABASE_URL);
+  const listing = await sql`SELECT user_id FROM listings WHERE id = ${parseInt(listingId)}`;
+  if (!listing.length) return c.json({ message: "Listing not found" }, 404);
+  const sellerId = listing[0].user_id;
+  const existing = await sql`SELECT id FROM conversations WHERE listing_id = ${parseInt(listingId)} AND buyer_id = ${parseInt(user.id)} AND seller_id = ${parseInt(sellerId)}`;
+  if (existing.length) return c.json({ id: String(existing[0].id) });
+  const res = await sql`INSERT INTO conversations (listing_id, buyer_id, seller_id) VALUES (${parseInt(listingId)}, ${parseInt(user.id)}, ${parseInt(sellerId)}) RETURNING id`;
+  return c.json({ id: String(res[0].id) });
+});
+app.get("/api/conversations", async (c) => {
+  const user = c.get("user");
+  const sql = Ys(c.env.DATABASE_URL);
+  const rows = await sql`
+        SELECT c.id as conversation_id, c.listing_id, l.title as listing_title, l.image_url,
+               CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN c.seller_id ELSE c.buyer_id END as other_user_id,
+               CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN u_seller.name ELSE u_buyer.name END as other_user_name,
+               m.content as last_message, m.timestamp as last_message_date
+        FROM conversations c
+        JOIN listings l ON c.listing_id = l.id
+        LEFT JOIN users u_buyer ON c.buyer_id = u_buyer.id
+        LEFT JOIN users u_seller ON c.seller_id = u_seller.id
+        LEFT JOIN messages m ON c.id = m.conversation_id AND m.id = (SELECT MAX(id) FROM messages WHERE conversation_id = c.id)
+        WHERE c.buyer_id = ${parseInt(user.id)} OR c.seller_id = ${parseInt(user.id)}
+        ORDER BY COALESCE(m.timestamp, TO_TIMESTAMP(0)) DESC, c.id DESC
+    `;
+  return c.json(rows.map((r) => ({ conversationId: String(r.conversation_id), listingId: String(r.listing_id), listingTitle: r.listing_title, listingImage: r.image_url ? r.image_url.split(",")[0] : "", otherUserId: String(r.other_user_id), otherUserName: r.other_user_name, lastMessage: r.last_message || "", lastMessageDate: r.last_message_date || /* @__PURE__ */ new Date() })));
+});
+app.get("/api/conversations/:id/messages", async (c) => {
+  const user = c.get("user");
+  const cid = c.req.param("id");
+  const sql = Ys(c.env.DATABASE_URL);
+  const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(cid)} AND (buyer_id = ${parseInt(user.id)} OR seller_id = ${parseInt(user.id)})`;
+  if (!conv.length) return c.json({ message: "Not found" }, 404);
+  const rows = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, timestamp FROM messages WHERE conversation_id = ${parseInt(cid)} ORDER BY timestamp ASC`;
+  return c.json(rows.map((r) => ({ ...r, id: String(r.id), conversation_id: String(r.conversation_id), sender_id: String(r.sender_id), receiver_id: String(r.receiver_id) })));
+});
+app.post("/api/messages", async (c) => {
+  const user = c.get("user");
+  const { conversationId, receiverId, content } = await c.req.json();
+  const sql = Ys(c.env.DATABASE_URL);
+  const result = await sql`INSERT INTO messages (conversation_id, sender_id, receiver_id, content) VALUES (${parseInt(conversationId)}, ${parseInt(user.id)}, ${parseInt(receiverId)}, ${content}) RETURNING id, timestamp`;
+  return c.json({ ...result[0], id: String(result[0].id), conversation_id: String(conversationId), sender_id: String(user.id), receiver_id: String(receiverId), content });
 });
 var worker_default = app;
 
@@ -10528,7 +10676,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-FM2Mt5/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-LRwejF/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -10562,7 +10710,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-FM2Mt5/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-LRwejF/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
