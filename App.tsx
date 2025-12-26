@@ -2,13 +2,17 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { CATEGORIES, SUB_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
-import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal, VendorProfileView } from './components/Components';
-import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon, RefreshCwIcon } from './components/Icons';
+import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal, VendorProfileView, MaintenanceView } from './components/Components';
+import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon, RefreshCwIcon, TumbiLogo } from './components/Icons';
 import ThemeToggle from './components/ThemeToggle';
 import { App as CapApp } from '@capacitor/app';
 
-// Use the LIVE Cloudflare Worker URL as the primary endpoint for the app
-const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
+// Detect if we are running in a local development environment
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+// Use local backend during development, otherwise use the LIVE Cloudflare Worker URL
+const DEFAULT_API_URL = isLocal ? "http://localhost:8787" : "https://tumbi-backend.bekalu77.workers.dev";
+const API_URL = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
+
 const PAGE_SIZE = 12;
 
 export default function App() {
@@ -17,6 +21,7 @@ export default function App() {
   const [isUserLoading, setIsUserLoading] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
   // Data State
   const [listings, setListings] = useState<Listing[]>([]);
@@ -110,8 +115,10 @@ export default function App() {
       
       setHasMore(data.length === PAGE_SIZE);
       setOffset(currentOffset + data.length);
+      setIsOffline(false);
     } catch (e) {
       console.error("App: Failed to load listings:", e);
+      if (currentOffset === 0) setIsOffline(true);
     } finally {
       setIsListingsLoading(false);
       setIsLoadingMore(false);
@@ -407,6 +414,8 @@ export default function App() {
   const handleTouchMove = (e: React.TouchEvent) => { if (touchStart !== null && window.scrollY === 0) { const distance = e.targetTouches[0].clientY - touchStart; if (distance > 0) setPullDistance(Math.min(distance, 80)); } };
   const handleTouchEnd = () => { if (pullDistance > 60) handleRefresh(); setTouchStart(null); setPullDistance(0); };
 
+  if (isOffline) return <MaintenanceView onRetry={handleRefresh} />;
+
   return (
     <div 
       className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`}
@@ -435,7 +444,8 @@ export default function App() {
             <div className="max-w-6xl mx-auto px-4 py-3">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={resetAllFilters}>
-                        <h1 className="text-xl font-bold tracking-tight uppercase">TUMBI marketplace</h1>
+                        <TumbiLogo className="w-8 h-8" color="white" />
+                        <h1 className="text-xl font-bold tracking-tight uppercase">TUMBI</h1>
                     </div>
                     <div className="flex items-center space-x-2">
                         <button onClick={handleRefresh} className={`p-2 rounded-full text-white/80 hover:text-white transition-colors ${isRefreshing ? 'animate-spin' : ''}`}>

@@ -1,10 +1,60 @@
 
 import React, { useState, useRef, useEffect, memo } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
-import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, SaveIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon, BookmarkIcon } from './Icons';
+import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, SaveIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon, BookmarkIcon, TumbiLogo, RefreshCwIcon } from './Icons';
 import { CATEGORIES, SUB_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
 
 const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
+
+// --- Maintenance / Error View ---
+export const MaintenanceView = ({ onRetry }: { onRetry: () => void }) => {
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex flex-col animate-in fade-in duration-500">
+            <header className="bg-tumbi-500 dark:bg-dark-card shadow-md">
+                <div className="max-w-6xl mx-auto px-4 py-3">
+                    <div className="flex items-center space-x-2 text-white">
+                        <TumbiLogo className="w-8 h-8" color="white" />
+                        <h1 className="text-xl font-bold tracking-tight uppercase">TUMBI</h1>
+                    </div>
+                </div>
+            </header>
+            <main className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+                <div className="bg-white dark:bg-dark-card p-8 sm:p-12 rounded-[2.5rem] shadow-2xl shadow-tumbi-100/50 dark:shadow-none max-w-md w-full border border-gray-100 dark:border-dark-border relative overflow-hidden">
+                    {/* Background Decorative Pattern */}
+                    <div className="absolute -top-10 -right-10 w-32 h-32 bg-tumbi-500/5 rounded-full blur-3xl"></div>
+                    <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-tumbi-500/5 rounded-full blur-3xl"></div>
+
+                    <div className="w-24 h-24 bg-tumbi-50 dark:bg-tumbi-900/30 rounded-full flex items-center justify-center mx-auto mb-8 ring-8 ring-tumbi-50/50 dark:ring-tumbi-900/10">
+                        <HammerIcon className="w-12 h-12 text-tumbi-600 dark:text-tumbi-400" />
+                    </div>
+                    
+                    <h2 className="text-3xl font-black text-gray-900 dark:text-dark-text mb-4">Under Construction</h2>
+                    <p className="text-gray-500 dark:text-dark-subtext mb-10 leading-relaxed font-medium">
+                        We're currently fine-tuning the marketplace to give you the best experience. We'll be back online and ready for business very shortly!
+                    </p>
+                    
+                    <button 
+                        onClick={onRetry}
+                        className="w-full bg-tumbi-600 hover:bg-tumbi-700 text-white font-bold py-4.5 rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center shadow-lg shadow-tumbi-200 dark:shadow-none group"
+                    >
+                        <RefreshCwIcon className="w-5 h-5 mr-3 group-active:animate-spin" /> 
+                        Refresh Connection
+                    </button>
+                    
+                    <p className="mt-8 text-[10px] text-gray-400 dark:text-dark-subtext uppercase font-bold tracking-[0.2em]">
+                        Assurance of Quality & Service
+                    </p>
+                </div>
+                
+                <div className="mt-12 flex items-center space-x-4 opacity-50">
+                    <div className="w-12 h-1 bg-gray-200 dark:bg-dark-border rounded-full"></div>
+                    <TumbiLogo className="w-5 h-5 grayscale dark:invert" />
+                    <div className="w-12 h-1 bg-gray-200 dark:bg-dark-border rounded-full"></div>
+                </div>
+            </main>
+        </div>
+    );
+};
 
 // Image optimization function
 const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<File> => {
@@ -66,17 +116,17 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
 // Helper to get labels from slugs
 const getCategoryLabel = (mainSlug: string, subValue: string) => {
     const main = CATEGORIES.find(c => c.slug === mainSlug);
-    const sub = SUB_CATEGORIES[mainSlug]?.find(s => s.value === subValue);
+    const sub = SUB_CATEGORIES[mainSlug]?.find(s => s.label === subValue || s.value === subValue);
     return {
         mainLabel: main?.name || mainSlug,
         subLabel: sub?.label || subValue
     };
 };
 
-// --- Auth Modal (Desktop Optimized Floating Modal) ---
+// --- Auth Modal ---
 export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onAuthSuccess: (data: { auth: boolean, token: string, user: User }) => void }) => {
     const [isRegister, setIsRegister] = useState(false);
-    const [formData, setFormData] = useState({ name: '', email: '', password: '', location: '', phone: '' });
+    const [formData, setFormData] = useState({ name: '', email: '', password: '', location: '', phone: '', identifier: '' });
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -86,11 +136,20 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
         setIsLoading(true);
 
         const endpoint = isRegister ? '/register' : '/login';
-        const body = isRegister ? formData : { email: formData.email, password: formData.password };
+        
+        const body = isRegister ? { 
+            name: formData.name, 
+            email: formData.email.trim() || undefined, 
+            phone: formData.phone.trim(), 
+            password: formData.password.trim(), 
+            location: formData.location 
+        } : {
+            identifier: formData.identifier.trim(),
+            password: formData.password.trim()
+        };
 
         try {
-            const response = await fetch(`${API_URL}/api${endpoint}`,
-            {
+            const response = await fetch(`${API_URL}/api${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
@@ -99,7 +158,7 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.message || 'Something went wrong');
+                throw new Error(data.message || 'Authentication failed');
             }
             
             onAuthSuccess(data);
@@ -120,38 +179,41 @@ export const AuthModal = ({ onClose, onAuthSuccess }: { onClose: () => void, onA
                 <div className="p-6 sm:p-10 overflow-y-auto">
                     <div className="text-center mb-8">
                         <div className="inline-block p-4 bg-tumbi-100 dark:bg-tumbi-900/50 rounded-2xl mb-4">
-                            <UserIcon className="w-10 h-10 text-tumbi-600 dark:text-tumbi-300" />
+                            <TumbiLogo className="w-12 h-12 text-tumbi-600 dark:text-tumbi-300" />
                         </div>
                         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-dark-text">{isRegister ? 'Create Account' : 'Welcome Back'}</h2>
                         <p className="text-sm text-gray-500 dark:text-dark-subtext mt-2">{isRegister ? 'Join the Tumbi marketplace to start trading.' : 'Log in to manage your listings and messages.'}</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {isRegister && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label>
-                                    <input required placeholder="E.g. Abebe Bikila" className="w-full border border-gray-200 dark:border-dark-border rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text transition-all" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                        {isRegister ? (
+                            <>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label>
+                                        <input required placeholder="E.g. Abebe Bikila" className="w-full border border-gray-200 dark:border-dark-border rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text transition-all" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Phone Number</label>
+                                        <input required type="tel" placeholder="0911..." className="w-full border border-gray-200 dark:border-dark-border rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text transition-all" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                                    </div>
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Phone Number</label>
-                                    <input required type="tel" placeholder="0911..." className="w-full border border-gray-200 dark:border-dark-border rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text transition-all" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address (Optional)</label>
+                                    <input type="email" placeholder="name@example.com" className="w-full border border-gray-300 dark:border-dark-border rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text transition-all" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                                 </div>
-                            </div>
-                        )}
-                        
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address</label>
-                            <input required type="email" placeholder="name@example.com" className="w-full border border-gray-200 dark:border-dark-border rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text transition-all" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                        </div>
-
-                        {isRegister && (
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Your Location</label>
+                                    <select required className="w-full border border-gray-200 dark:border-dark-border rounded-xl p-3.5 text-sm bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none transition-all" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
+                                        <option value="">Select City</option>
+                                        {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                                    </select>
+                                </div>
+                            </>
+                        ) : (
                             <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Your Location</label>
-                                <select required className="w-full border border-gray-200 dark:border-dark-border rounded-xl p-3.5 text-sm bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none transition-all" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
-                                    <option value="">Select City</option>
-                                    {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
-                                </select>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Phone Number or Email</label>
+                                <input required type="text" placeholder="0911... or name@example.com" className="w-full border border-gray-200 dark:border-dark-border rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-dark-text transition-all" value={formData.identifier} onChange={e => setFormData({...formData, identifier: e.target.value})} />
                             </div>
                         )}
 
@@ -257,7 +319,7 @@ export const RecommendedCard: React.FC<{category: any, onClick: () => void}> = (
 );
 
 
-// --- Category Pill (Unchanged from before) ---
+// --- Category Pill ---
 interface CategoryPillProps {
   category: Category;
   isSelected: boolean;
@@ -274,7 +336,7 @@ export const CategoryPill: React.FC<CategoryPillProps> = ({ category, isSelected
 );
 
 
-// --- Add/Edit Listing Form (Updated Category Structure) ---
+// --- Add/Edit Listing Form ---
 interface AddListingProps {
   onClose: () => void;
   onSubmit: (listingData: any, imageUrls: string[]) => void; 
@@ -498,7 +560,7 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
 
 // --- Edit Profile Modal ---
 export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClose: () => void, onSave: (data: { name: string, email: string, location: string }) => void }) => {
-    const [formData, setFormData] = useState({ name: user.name, email: user.email, location: user.location });
+    const [formData, setFormData] = useState({ name: user.name, email: user.email || '', location: user.location });
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -510,14 +572,14 @@ export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClos
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white dark:bg-dark-card rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-dark-card rounded-2xl w-full max-sm overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200">
                 <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-gray-100 dark:hover:bg-dark-bg rounded-full text-gray-500 transition-colors">
                     <XIcon className="w-5 h-5" />
                 </button>
                 <div className="p-8">
                     <div className="text-center mb-6">
                         <div className="inline-block p-3 bg-tumbi-100 dark:bg-tumbi-900/50 rounded-full mb-3">
-                            <UserIcon className="w-8 h-8 text-tumbi-600 dark:text-tumbi-300" />
+                            <TumbiLogo className="w-10 h-10 text-tumbi-600 dark:text-tumbi-300" />
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Edit Profile</h2>
                         <p className="text-sm text-gray-500 dark:text-dark-subtext mt-1">Update your account information.</p>
@@ -529,8 +591,8 @@ export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClos
                             <input required placeholder="Full Name" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500 dark:text-dark-subtext ml-1 uppercase">Email Address</label>
-                            <input required type="email" placeholder="Email Address" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                            <label className="text-xs font-bold text-gray-500 dark:text-dark-subtext ml-1 uppercase">Email Address (Optional)</label>
+                            <input type="email" placeholder="Email Address" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                         </div>
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-gray-500 dark:text-dark-subtext ml-1 uppercase">Location</label>
@@ -592,7 +654,7 @@ export const VendorProfileView = ({ vendorId, listings, onBack, onOpenListing }:
     );
 }
 
-// --- Other Views ---
+// --- Saved View ---
 export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listings: Listing[], onOpen: (id: string) => void, savedIds: Set<string>, onToggleSave: (id: string) => void }) => {
     const savedListings = listings.filter(l => savedIds.has(String(l.id)));
     return (
@@ -614,6 +676,7 @@ export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listin
     );
 };
 
+// --- Messages View ---
 export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: User, onOpenChat: (session: ChatSession) => void, onUnreadCountChange?: (count: number) => void }) => {
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [loading, setLoading] = useState(true);
@@ -716,6 +779,7 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
     );
 };
 
+// --- Profile View ---
 export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode, onEditListing, onDeleteListing, onEditProfile }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean, onEditListing: (listing: Listing) => void, onDeleteListing: (id: string) => void, onEditProfile: () => void }) => {
     const [subPage, setSubPage] = useState<'main' | 'my-listings'>('main');
     const myListings = listings.filter(l => l.sellerId === String(user.id));
@@ -756,7 +820,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
                     </div>
                     <div className="flex-1 min-w-0">
                         <h2 className="text-xl font-bold dark:text-dark-text truncate">{user.name}</h2>
-                        <p className="text-gray-500 dark:text-dark-subtext text-sm truncate">{user.email}</p>
+                        <p className="text-gray-500 dark:text-dark-subtext text-sm truncate">{user.email || 'No email provided'}</p>
                         <p className="text-gray-400 text-xs mt-1">{user.location} • {user.phone}</p>
                     </div>
                     <button onClick={onEditProfile} className="p-2 bg-gray-50 dark:bg-dark-bg rounded-full text-gray-500 hover:text-tumbi-600 transition-colors">
@@ -793,6 +857,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
     );
 };
 
+// --- Chat Conversation View ---
 export const ChatConversationView = ({ session, user, onBack, embedded = false }: { session: ChatSession; user: User; onBack: () => void; embedded?: boolean }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
@@ -863,13 +928,12 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
                 throw new Error(errorData.message || 'Failed to send');
             }
             
-            loadMessages(); // Refresh to get the real ID from DB
+            loadMessages();
         } catch (error) {
             console.error("Failed to send message:", error);
             alert("Failed to send message. Please try again.");
-            // Remove optimistic message on failure
             setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
-            setNewMessage(content); // Put text back in input
+            setNewMessage(content);
         }
     };
 
@@ -909,6 +973,7 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
     );
 };
 
+// --- Detail View ---
 export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdit, onChat, onOpenVendor }: { listing: Listing; onBack: () => void; isSaved: boolean; onToggleSave: (id: string) => void; user: User | null; onEdit: (listing: Listing) => void; onChat: (listing: Listing) => void; onOpenVendor?: (id: string) => void; }) => {
     const isOwner = user && String(user.id) === listing.sellerId;
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -926,9 +991,14 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                     <XIcon className="w-5 h-5" />
                 </button>
 
-                <div className="w-full md:w-3/5 aspect-square md:aspect-auto bg-black relative group">
+                {/* Fixed Image Gallery on Top (Mobile) */}
+                <div className="w-full md:w-3/5 h-[35vh] md:h-auto bg-black relative group flex-shrink-0">
                     {imageUrls.length > 0 && (
-                        <img src={imageUrls[currentImageIndex]} alt={listing.title} className="w-full h-full object-contain" />
+                        <img 
+                            src={imageUrls[currentImageIndex]} 
+                            alt={listing.title} 
+                            className="w-full h-full object-contain" 
+                        />
                     )}
                     {imageUrls.length > 1 && (
                         <>
@@ -941,7 +1011,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                     )}
                 </div>
 
-                <div className="w-full md:w-2/5 flex flex-col bg-white dark:bg-dark-card overflow-hidden">
+                <div className="flex-1 flex flex-col bg-white dark:bg-dark-card overflow-hidden">
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">

@@ -34,7 +34,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// .wrangler/tmp/bundle-hV8313/checked-fetch.js
+// .wrangler/tmp/bundle-aYibTW/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -52,7 +52,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-hV8313/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-aYibTW/checked-fetch.js"() {
     "use strict";
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
@@ -1910,11 +1910,11 @@ var require_bcrypt = __commonJS({
   }
 });
 
-// .wrangler/tmp/bundle-hV8313/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-aYibTW/middleware-loader.entry.ts
 init_checked_fetch();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-hV8313/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-aYibTW/middleware-insertion-facade.js
 init_checked_fetch();
 init_modules_watch_stub();
 
@@ -10387,6 +10387,24 @@ var sign2 = Jwt.sign;
 
 // src/worker.ts
 var app = new Hono2();
+function normalizePhone(phone) {
+  if (!phone) return void 0;
+  let clean = phone.replace(/[^\d+]/g, "");
+  if (clean.startsWith("0") && clean.length === 10) {
+    return "+251" + clean.substring(1);
+  }
+  if (clean.startsWith("251") && clean.length === 12) {
+    return "+" + clean;
+  }
+  if (clean.length === 9 && (clean.startsWith("9") || clean.startsWith("7"))) {
+    return "+251" + clean;
+  }
+  if (clean.startsWith("+251") && clean.length === 13) {
+    return clean;
+  }
+  return clean;
+}
+__name(normalizePhone, "normalizePhone");
 app.use("/*", cors({
   origin: "*",
   allowHeaders: ["Content-Type", "x-access-token", "Authorization", "X-Requested-With"],
@@ -10416,7 +10434,7 @@ app.use("/api/*", async (c, next) => {
   try {
     const decoded = await verify2(authHeader, c.env.JWT_SECRET);
     const sql = Ys(c.env.DATABASE_URL);
-    const users = await sql`SELECT id, name, email, location FROM users WHERE id = ${parseInt(decoded.id)}`;
+    const users = await sql`SELECT id, name, email, phone, location FROM users WHERE id = ${parseInt(decoded.id)}`;
     if (!users.length) return c.json({ message: "User not found" }, 401);
     c.set("user", { ...users[0], id: String(users[0].id) });
     return await next();
@@ -10428,21 +10446,37 @@ app.post("/api/register", async (c) => {
   try {
     const { name, email, phone, password, location } = await c.req.json();
     const sql = Ys(c.env.DATABASE_URL);
-    const existing = await sql`SELECT id FROM users WHERE email = ${email} OR phone = ${phone}`;
-    if (existing.length) return c.json({ message: "User already exists" }, 409);
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) return c.json({ message: "Valid phone number required" }, 400);
+    const existing = await sql`
+            SELECT id FROM users 
+            WHERE phone = ${normalizedPhone} 
+               OR phone = ${phone}
+               ${email ? sql`OR email = ${email}` : sql``}
+        `;
+    if (existing.length) return c.json({ message: "User already exists with this phone or email" }, 409);
     const hashedPassword = await import_bcryptjs.default.hash(password, 10);
-    const result = await sql`INSERT INTO users (name, email, phone, password, location) VALUES (${name}, ${email}, ${phone}, ${hashedPassword}, ${location}) RETURNING id`;
+    const result = await sql`INSERT INTO users (name, email, phone, password, location) VALUES (${name}, ${email || null}, ${normalizedPhone}, ${hashedPassword}, ${location}) RETURNING id`;
     const token = await sign2({ id: String(result[0].id) }, c.env.JWT_SECRET);
-    return c.json({ auth: true, token, user: { id: String(result[0].id), name, email, location } });
+    return c.json({ auth: true, token, user: { id: String(result[0].id), name, email, phone: normalizedPhone, location } });
   } catch (e) {
     return c.json({ message: e.message }, 500);
   }
 });
 app.post("/api/login", async (c) => {
   try {
-    const { email, password } = await c.req.json();
+    const body = await c.req.json();
+    const { password } = body;
+    const identifier = body.email || body.phone;
+    if (!identifier) return c.json({ message: "Email or phone required" }, 400);
     const sql = Ys(c.env.DATABASE_URL);
-    const rows = await sql`SELECT * FROM users WHERE email = ${email}`;
+    const normalized = normalizePhone(identifier);
+    const rows = await sql`
+            SELECT * FROM users 
+            WHERE email = ${identifier} 
+               OR phone = ${identifier} 
+               OR phone = ${normalized}
+        `;
     if (!rows.length || !await import_bcryptjs.default.compare(password, rows[0].password)) {
       return c.json({ message: "Invalid credentials" }, 401);
     }
@@ -10472,11 +10506,11 @@ app.get("/api/listings", async (c) => {
     const params = [];
     if (mainCategory && mainCategory !== "all") {
       params.push(mainCategory);
-      query += ` AND l.listing_type = $${params.length}`;
+      query += ` AND l.main_category = $${params.length}`;
     }
     if (subCategory && subCategory !== "all") {
       params.push(subCategory);
-      query += ` AND l.category_slug = $${params.length}`;
+      query += ` AND l.sub_category = $${params.length}`;
     }
     if (city && city !== "All Cities") {
       params.push(city);
@@ -10501,9 +10535,8 @@ app.get("/api/listings", async (c) => {
       price: parseFloat(r.price),
       imageUrls: r.image_url ? r.image_url.split(",") : [],
       isVerified: !!r.is_verified,
-      // Map back to frontend names
-      mainCategory: r.listing_type,
-      subCategory: r.category_slug,
+      mainCategory: r.main_category,
+      subCategory: r.sub_category,
       createdAt: r.created_at || /* @__PURE__ */ new Date(),
       sellerId: String(r.user_id)
     })));
@@ -10517,15 +10550,15 @@ app.post("/api/listings", async (c) => {
   const sql = Ys(c.env.DATABASE_URL);
   try {
     const result = await sql`
-            INSERT INTO listings (title, price, unit, location, listing_type, category_slug, description, image_url, user_id)
+            INSERT INTO listings (title, price, unit, location, main_category, sub_category, description, image_url, user_id)
             VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageUrls.join(",")}, ${parseInt(user.id)})
             RETURNING *
         `;
     return c.json({
       ...result[0],
       id: String(result[0].id),
-      mainCategory: result[0].listing_type,
-      subCategory: result[0].category_slug
+      mainCategory: result[0].main_category,
+      subCategory: result[0].sub_category
     });
   } catch (e) {
     return c.json({ message: e.message }, 500);
@@ -10540,7 +10573,7 @@ app.put("/api/listings/:id", async (c) => {
     const result = await sql`
             UPDATE listings SET 
                 title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
-                listing_type = ${mainCategory}, category_slug = ${subCategory}, 
+                main_category = ${mainCategory}, sub_category = ${subCategory}, 
                 description = ${description}, image_url = ${imageUrls.join(",")}
             WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)}
             RETURNING *
@@ -10549,8 +10582,8 @@ app.put("/api/listings/:id", async (c) => {
     return c.json({
       ...result[0],
       id: String(result[0].id),
-      mainCategory: result[0].listing_type,
-      subCategory: result[0].category_slug
+      mainCategory: result[0].main_category,
+      subCategory: result[0].sub_category
     });
   } catch (e) {
     return c.json({ message: e.message }, 500);
@@ -10629,9 +10662,11 @@ app.put("/api/users/me", async (c) => {
   const { name, email, location } = await c.req.json();
   const sql = Ys(c.env.DATABASE_URL);
   try {
-    const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${parseInt(user.id)}`;
-    if (existing.length) return c.json({ message: "Email already in use" }, 409);
-    await sql`UPDATE users SET name = ${name}, email = ${email}, location = ${location} WHERE id = ${parseInt(user.id)}`;
+    if (email) {
+      const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${parseInt(user.id)}`;
+      if (existing.length) return c.json({ message: "Email already in use" }, 409);
+    }
+    await sql`UPDATE users SET name = ${name}, email = ${email || null}, location = ${location} WHERE id = ${parseInt(user.id)}`;
     return c.json({ message: "Profile updated successfully" });
   } catch (e) {
     return c.json({ message: e.message }, 500);
@@ -10778,7 +10813,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-hV8313/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-aYibTW/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -10812,7 +10847,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-hV8313/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-aYibTW/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

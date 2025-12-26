@@ -9,7 +9,7 @@ DROP TABLE IF EXISTS users CASCADE;
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE, -- Changed: Removed NOT NULL to allow optional email
     phone VARCHAR(20) UNIQUE NOT NULL,
     password TEXT NOT NULL,
     location VARCHAR(255),

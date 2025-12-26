@@ -9,6 +9,27 @@ const iconProps = {
     strokeLinejoin: 'round' as 'round',
 };
 
+export const TumbiLogo = ({ className = 'w-8 h-8', color = 'currentColor' }) => (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+        {/* Plumb Bob representation */}
+        <path 
+            d="M12 2V8" 
+            stroke={color} 
+            strokeWidth="2" 
+            strokeLinecap="round"
+        />
+        <path 
+            d="M12 8L18 14L12 22L6 14L12 8Z" 
+            fill={color} 
+            stroke={color} 
+            strokeWidth="2" 
+            strokeLinejoin="round"
+        />
+        {/* Subtle decorative elements for professional look */}
+        <circle cx="12" cy="14" r="1.5" fill="white" fillOpacity="0.3" />
+    </svg>
+);
+
 export const SearchIcon = ({ className = 'w-6 h-6' }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
         <circle cx="11" cy="11" r="8" />

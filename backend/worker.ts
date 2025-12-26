@@ -12,6 +12,40 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+// --- HELPERS ---
+function getLoginVariants(input: string): string[] {
+    const clean = input.replace(/\D/g, ''); // Digits only
+    const variants = new Set<string>([input, clean]);
+    
+    let base = '';
+    if (clean.length === 10 && clean.startsWith('0')) {
+        base = clean.substring(1);
+    } else if (clean.length === 12 && clean.startsWith('251')) {
+        base = clean.substring(3);
+    } else if (clean.length === 9) {
+        base = clean;
+    }
+
+    if (base) {
+        variants.add(base);
+        variants.add('0' + base);
+        variants.add('251' + base);
+        variants.add('+251' + base);
+    }
+    
+    return Array.from(variants);
+}
+
+function normalizePhoneForStorage(phone: string | undefined): string {
+    if (!phone) return '';
+    let clean = phone.replace(/[^\d]/g, '');
+    if (clean.length === 10 && clean.startsWith('0')) return '+251' + clean.substring(1);
+    if (clean.length === 12 && clean.startsWith('251')) return '+' + clean;
+    if (clean.length === 9 && (clean.startsWith('9') || clean.startsWith('7'))) return '+251' + clean;
+    if (clean.length === 12) return '+' + clean;
+    return phone;
+}
+
 // --- MIDDLEWARE ---
 app.use('/*', cors({
   origin: '*',
@@ -31,7 +65,7 @@ app.use('/api/*', async (c, next) => {
     try {
         const decoded = await verify(authHeader, c.env.JWT_SECRET);
         const sql = neon(c.env.DATABASE_URL);
-        const users = await sql`SELECT id, name, email, location FROM users WHERE id = ${decoded.id}`;
+        const users = await sql`SELECT id, name, email, phone, location FROM users WHERE id = ${decoded.id}`;
         if (!users.length) return c.json({ message: 'User not found' }, 401);
         c.set('user', users[0]);
         return await next();
@@ -45,76 +79,57 @@ app.post('/api/register', async (c) => {
     try {
         const { name, email, phone, password, location } = await c.req.json();
         const sql = neon(c.env.DATABASE_URL);
-        const existing = await sql`SELECT id FROM users WHERE email = ${email} OR phone = ${phone}`;
+        
+        const normPhone = normalizePhoneForStorage(phone);
+        const variants = getLoginVariants(phone);
+        
+        const existing = await sql`
+            SELECT id FROM users 
+            WHERE phone IN (${variants}) 
+               OR phone = ${normPhone} 
+               OR (email IS NOT NULL AND email = ${email})
+        `;
+        
         if (existing.length) return c.json({ message: 'User already exists' }, 409);
         
         const hashedPassword = await bcrypt.hash(password, 10);
-        const result = await sql`INSERT INTO users (name, email, phone, password, location) VALUES (${name}, ${email}, ${phone}, ${hashedPassword}, ${location}) RETURNING id`;
+        const result = await sql`INSERT INTO users (name, email, phone, password, location) VALUES (${name}, ${email || null}, ${normPhone}, ${hashedPassword}, ${location}) RETURNING id`;
         const token = await sign({ id: result[0].id }, c.env.JWT_SECRET);
-        return c.json({ auth: true, token, user: { id: result[0].id, name, email, location } });
+        return c.json({ auth: true, token, user: { id: result[0].id, name, email, phone: normPhone, location } });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
 app.post('/api/login', async (c) => {
     try {
-        const { email, password } = await c.req.json();
+        const body = await c.req.json();
+        const password = body.password;
+        const input = (body.identifier || body.email || body.phone || '').trim();
+
+        if (!input || !password) {
+            return c.json({ message: 'Email/Phone and Password are required' }, 400);
+        }
+
         const sql = neon(c.env.DATABASE_URL);
-        const rows = await sql`SELECT * FROM users WHERE email = ${email}`;
+        const variants = getLoginVariants(input);
+        
+        // Search by email OR any phone variant
+        const rows = await sql`
+            SELECT * FROM users 
+            WHERE email = ${input} 
+               OR phone IN (${variants})
+        `;
+
         if (!rows.length || !(await bcrypt.compare(password, rows[0].password))) {
             return c.json({ message: 'Invalid credentials' }, 401);
         }
+        
         const token = await sign({ id: rows[0].id }, c.env.JWT_SECRET);
         const { password: _, ...user } = rows[0];
         return c.json({ auth: true, token, user });
     } catch (e: any) { return c.json({ message: e.message }, 500); }
 });
 
-// --- PROFILE ---
-app.put('/api/users/me', async (c) => {
-    const user = c.get('user');
-    try {
-        const { name, email, location } = await c.req.json();
-        const sql = neon(c.env.DATABASE_URL);
-        
-        const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${user.id}`;
-        if (existing.length) return c.json({ message: 'Email already in use' }, 409);
-
-        await sql`UPDATE users SET name = ${name}, email = ${email}, location = ${location} WHERE id = ${user.id}`;
-        return c.json({ success: true, message: 'Profile updated' });
-    } catch (e: any) { return c.json({ message: e.message }, 500); }
-});
-
-// --- SAVED LISTINGS ---
-app.get('/api/saved', async (c) => {
-    const user = c.get('user');
-    const sql = neon(c.env.DATABASE_URL);
-    try {
-        const rows = await sql`SELECT listing_id FROM saved_listings WHERE user_id = ${user.id}`;
-        return c.json(rows.map(r => String(r.listing_id)));
-    } catch (e: any) { return c.json({ message: e.message }, 500); }
-});
-
-app.post('/api/saved/:id', async (c) => {
-    const user = c.get('user');
-    const listingId = parseInt(c.req.param('id'));
-    const sql = neon(c.env.DATABASE_URL);
-    try {
-        await sql`INSERT INTO saved_listings (user_id, listing_id) VALUES (${user.id}, ${listingId}) ON CONFLICT DO NOTHING`;
-        return c.json({ success: true });
-    } catch (e: any) { return c.json({ message: e.message }, 500); }
-});
-
-app.delete('/api/saved/:id', async (c) => {
-    const user = c.get('user');
-    const listingId = parseInt(c.req.param('id'));
-    const sql = neon(c.env.DATABASE_URL);
-    try {
-        await sql`DELETE FROM saved_listings WHERE user_id = ${user.id} AND listing_id = ${listingId}`;
-        return c.json({ success: true });
-    } catch (e: any) { return c.json({ message: e.message }, 500); }
-});
-
-// --- LISTINGS ---
+// ... rest of the file ...
 app.get('/api/listings', async (c) => {
     const sql = neon(c.env.DATABASE_URL);
     try {
