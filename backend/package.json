@@ -8,11 +8,13 @@
     "start": "npm run dev",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev --remote --ip 127.0.0.1 --port 8787",
-    "seed": "npx ts-node database/seed_neon.ts"
+    "seed": "npx ts-node database/seed_neon.ts",
+    "migrate": "npx ts-node database/migrate.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.1",
     "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
     "hono": "^4.2.8",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3"

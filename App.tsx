@@ -246,6 +246,12 @@ export default function App() {
         document.documentElement.classList.remove('dark');
         setIsDarkMode(false);
       }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const sharedListingId = urlParams.get('listing');
+      if (sharedListingId) {
+        openListing(sharedListingId);
+      }
     };
     initApp();
   }, []);
@@ -360,18 +366,53 @@ export default function App() {
       } catch (error: any) { alert(`Failed to update profile: ${error.message}`); }
   };
 
-  const openListing = (id: string) => { setSelectedListingId(id.toString()); setViewState('details'); };
+  const openListing = async (id: string) => { 
+    setSelectedListingId(id.toString()); 
+    setViewState('details');
+    
+    try {
+        const response = await fetch(`${API_URL}/api/listings/${id}`, { cache: 'no-store' });
+        if (response.ok) {
+            const data = await response.json();
+            setListings(prev => {
+                const exists = prev.find(l => String(l.id) === String(id));
+                if (exists) {
+                    return prev.map(l => String(l.id) === String(id) ? { ...l, ...data } : l);
+                } else {
+                    return [data, ...prev];
+                }
+            });
+        }
+    } catch (err) {
+        console.error("Failed to fetch/increment listing view:", err);
+    }
+  };
   const startEditListing = (listing: Listing) => { setEditingListing(listing); setViewState('edit'); };
   const openChat = async (listing: Listing) => {
     const token = localStorage.getItem('token');
     if (!user || !token) { setShowAuth(true); return; }
-    if (String(user.id) === listing.sellerId) { alert("You cannot start a chat about your own listing."); return; }
+    if (String(user.id) === String(listing.sellerId)) { alert("You cannot start a chat about your own listing."); return; }
     try {
-      const res = await fetch(`${API_URL}/api/conversations`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token }, body: JSON.stringify({ listingId: listing.id }) });
+      const res = await fetch(`${API_URL}/api/conversations`, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json', 'x-access-token': token }, 
+          body: JSON.stringify({ listingId: listing.id }) 
+      });
       const conversationData = await res.json();
       if (!res.ok) throw new Error(conversationData.message);
+      
       const firstImage = Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0 ? listing.imageUrls[0] : '';
-      setActiveChat({ conversationId: conversationData.id, listingId: listing.id, listingTitle: listing.title, listingImage: firstImage, otherUserId: listing.sellerId as string, otherUserName: listing.sellerName, lastMessage: '', lastMessageDate: new Date() });
+      setActiveChat({ 
+          conversationId: String(conversationData.id), 
+          listingId: String(listing.id), 
+          listingTitle: listing.title, 
+          listingImage: firstImage, 
+          otherUserId: String(listing.sellerId), 
+          otherUserName: listing.sellerName, 
+          otherUserImage: listing.sellerImage,
+          lastMessage: '', 
+          lastMessageDate: new Date() 
+      });
       setViewState('chat-conversation');
     } catch (error: any) { alert(`Error starting chat: ${error.message}`); }
   };
@@ -423,7 +464,6 @@ export default function App() {
       onTouchMove={viewState === 'home' ? handleTouchMove : undefined}
       onTouchEnd={viewState === 'home' ? handleTouchEnd : undefined}
     >
-        {/* Refresh Indicator */}
         {pullDistance > 0 && (
           <div className="fixed top-0 left-0 w-full flex justify-center z-[100] transition-transform pointer-events-none" style={{ transform: `translateY(${pullDistance}px)` }}>
             <div className="bg-white dark:bg-dark-card p-2 rounded-full shadow-lg border border-gray-100 dark:border-dark-border">
@@ -439,7 +479,6 @@ export default function App() {
         {viewState === 'vendor-profile' && selectedVendorId && <VendorProfileView vendorId={selectedVendorId} listings={listings} onBack={() => setViewState('details')} onOpenListing={openListing} />}
         {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isListingsLoading} />}
         
-        {/* Header Section */}
         <header className="sticky top-0 z-30 bg-tumbi-500 dark:bg-dark-card shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-3">
                 <div className="flex items-center justify-between mb-3">
@@ -555,7 +594,7 @@ export default function App() {
                 <button onClick={() => checkAuthAndGo('messages')} className={`flex flex-col items-center justify-center w-full h-full relative ${viewState === 'messages' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>
                     <MessageCircleIcon className="w-6 h-6" />
                     {totalUnreadMessages > 0 && (
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-white dark:border-dark-card"></div>
+                        <div className="absolute top-3 right-1/2 translate-x-4 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-dark-card"></div>
                     )}
                 </button>
                 <button onClick={() => checkAuthAndGo('profile')} className={`flex flex-col items-center justify-center w-full h-full ${viewState === 'profile' || viewState === 'register' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}>

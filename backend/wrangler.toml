@@ -6,6 +6,7 @@ compatibility_date = "2024-04-05"
 [vars]
 DATABASE_URL = "postgresql://neondb_owner:npg_PWh13GNCltza@ep-delicate-recipe-agnq91f0-pooler.c-2.eu-central-1.aws.neon.tech/neondb?sslmode=require"
 JWT_SECRET = "2dbfe2202056ea02ed0bc6700557c4ae5315dda04c678d821296f42bfdb895cc"
+R2_PUBLIC_URL = "https://pub-f4faac6ec4e94df08e2c56afbf983bf1.r2.dev"
 
 # Bind your R2 bucket
 [[r2_buckets]]

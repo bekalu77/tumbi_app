@@ -9,15 +9,16 @@ const accessKeyId = process.env.R2_ACCESS_KEY_ID;
 const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
 
 if (!accountId || !accessKeyId || !secretAccessKey) {
-    throw new Error('Cloudflare R2 credentials are not defined in environment variables.');
+    // throw new Error('Cloudflare R2 credentials are not defined in environment variables.');
+    console.warn('Cloudflare R2 credentials are not defined in environment variables.');
 }
 
 export const r2 = new S3Client({
     region: 'auto',
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: {
-        accessKeyId,
-        secretAccessKey,
+        accessKeyId: accessKeyId || '',
+        secretAccessKey: secretAccessKey || '',
     },
 });
 

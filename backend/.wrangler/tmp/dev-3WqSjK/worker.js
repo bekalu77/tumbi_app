@@ -34,7 +34,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// .wrangler/tmp/bundle-FX4DQM/checked-fetch.js
+// .wrangler/tmp/bundle-SwOVp1/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -52,7 +52,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-FX4DQM/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-SwOVp1/checked-fetch.js"() {
     "use strict";
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
@@ -1910,11 +1910,11 @@ var require_bcrypt = __commonJS({
   }
 });
 
-// .wrangler/tmp/bundle-FX4DQM/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-SwOVp1/middleware-loader.entry.ts
 init_checked_fetch();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-FX4DQM/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-SwOVp1/middleware-insertion-facade.js
 init_checked_fetch();
 init_modules_watch_stub();
 
@@ -10435,7 +10435,7 @@ app.use("/api/*", async (c, next) => {
   try {
     const decoded = await verify2(authHeader, c.env.JWT_SECRET);
     const sql = Ys(c.env.DATABASE_URL);
-    const users = await sql`SELECT id, name, email, phone, location FROM users WHERE id = ${parseInt(decoded.id)}`;
+    const users = await sql`SELECT id, name, email, phone, location, profile_image FROM users WHERE id = ${parseInt(decoded.id)}`;
     if (!users.length) return c.json({ message: "User not found" }, 401);
     c.set("user", { ...users[0], id: String(users[0].id) });
     return await next();
@@ -10513,7 +10513,7 @@ app.get("/api/listings", async (c) => {
   const city = c.req.query("city");
   const search = c.req.query("search");
   const sortBy = c.req.query("sortBy") || "date-desc";
-  let query = `SELECT l.*, u.name as "sellerName", u.phone as "sellerPhone" FROM listings l LEFT JOIN users u ON l.user_id = u.id WHERE 1=1`;
+  let query = `SELECT l.*, u.name as "sellerName", u.phone as "sellerPhone" FROM listings l LEFT JOIN users u ON l.user_id = u.id WHERE l.status = 'active'`;
   const params = [];
   if (mainCategory && mainCategory !== "all") {
     params.push(mainCategory);
@@ -10560,9 +10560,9 @@ app.post("/api/listings", async (c) => {
 app.put("/api/listings/:id", async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
-  const { title, price, unit, location, mainCategory, subCategory, description, imageUrls } = await c.req.json();
+  const { title, price, unit, location, mainCategory, subCategory, description, imageUrls, status } = await c.req.json();
   const sql = Ys(c.env.DATABASE_URL);
-  const result = await sql`UPDATE listings SET title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, main_category = ${mainCategory}, sub_category = ${subCategory}, description = ${description}, image_url = ${imageUrls.join(",")} WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} RETURNING *`;
+  const result = await sql`UPDATE listings SET title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, main_category = ${mainCategory}, sub_category = ${subCategory}, description = ${description}, image_url = ${imageUrls.join(",")}, status = ${status || "active"} WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} RETURNING *`;
   if (!result.length) return c.json({ message: "Not authorized" }, 403);
   return c.json({ ...result[0], id: String(result[0].id) });
 });
@@ -10597,11 +10597,11 @@ app.delete("/api/saved/:id", async (c) => {
 app.get("/api/users/me", async (c) => c.json(c.get("user")));
 app.put("/api/users/me", async (c) => {
   const user = c.get("user");
-  const { name, email, location } = await c.req.json();
+  const { name, email, location, profileImage } = await c.req.json();
   const sql = Ys(c.env.DATABASE_URL);
   const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${parseInt(user.id)}`;
   if (existing.length) return c.json({ message: "Email in use" }, 409);
-  await sql`UPDATE users SET name = ${name}, email = ${email}, location = ${location} WHERE id = ${parseInt(user.id)}`;
+  await sql`UPDATE users SET name = ${name}, email = ${email}, location = ${location}, profile_image = ${profileImage} WHERE id = ${parseInt(user.id)}`;
   return c.json({ message: "Updated" });
 });
 app.post("/api/upload", async (c) => {
@@ -10637,16 +10637,17 @@ app.get("/api/conversations", async (c) => {
         SELECT c.id as conversation_id, c.listing_id, l.title as listing_title, l.image_url,
                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN c.seller_id ELSE c.buyer_id END as other_user_id,
                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN u_seller.name ELSE u_buyer.name END as other_user_name,
-               m.content as last_message, m.timestamp as last_message_date
+               m.content as last_message, m.created_at as last_message_date,
+               (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND receiver_id = ${parseInt(user.id)} AND is_read = false) as unread_count
         FROM conversations c
         JOIN listings l ON c.listing_id = l.id
         LEFT JOIN users u_buyer ON c.buyer_id = u_buyer.id
         LEFT JOIN users u_seller ON c.seller_id = u_seller.id
         LEFT JOIN messages m ON c.id = m.conversation_id AND m.id = (SELECT MAX(id) FROM messages WHERE conversation_id = c.id)
         WHERE c.buyer_id = ${parseInt(user.id)} OR c.seller_id = ${parseInt(user.id)}
-        ORDER BY COALESCE(m.timestamp, TO_TIMESTAMP(0)) DESC, c.id DESC
+        ORDER BY COALESCE(m.created_at, TO_TIMESTAMP(0)) DESC, c.id DESC
     `;
-  return c.json(rows.map((r) => ({ conversationId: String(r.conversation_id), listingId: String(r.listing_id), listingTitle: r.listing_title, listingImage: r.image_url ? r.image_url.split(",")[0] : "", otherUserId: String(r.other_user_id), otherUserName: r.other_user_name, lastMessage: r.last_message || "", lastMessageDate: r.last_message_date || /* @__PURE__ */ new Date() })));
+  return c.json(rows.map((r) => ({ conversationId: String(r.conversation_id), listingId: String(r.listing_id), listingTitle: r.listing_title, listingImage: r.image_url ? r.image_url.split(",")[0] : "", otherUserId: String(r.other_user_id), otherUserName: r.other_user_name, lastMessage: r.last_message || "", lastMessageDate: r.last_message_date || /* @__PURE__ */ new Date(), unreadCount: parseInt(r.unread_count) })));
 });
 app.get("/api/conversations/:id/messages", async (c) => {
   const user = c.get("user");
@@ -10654,15 +10655,16 @@ app.get("/api/conversations/:id/messages", async (c) => {
   const sql = Ys(c.env.DATABASE_URL);
   const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(cid)} AND (buyer_id = ${parseInt(user.id)} OR seller_id = ${parseInt(user.id)})`;
   if (!conv.length) return c.json({ message: "Not found" }, 404);
-  const rows = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, timestamp FROM messages WHERE conversation_id = ${parseInt(cid)} ORDER BY timestamp ASC`;
-  return c.json(rows.map((r) => ({ ...r, id: String(r.id), conversation_id: String(r.conversation_id), sender_id: String(r.sender_id), receiver_id: String(r.receiver_id) })));
+  await sql`UPDATE messages SET is_read = true WHERE conversation_id = ${parseInt(cid)} AND receiver_id = ${parseInt(user.id)}`;
+  const rows = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, created_at FROM messages WHERE conversation_id = ${parseInt(cid)} ORDER BY created_at ASC`;
+  return c.json(rows.map((r) => ({ ...r, id: String(r.id), conversation_id: String(r.conversation_id), sender_id: String(r.sender_id), receiver_id: String(r.receiver_id), timestamp: r.created_at })));
 });
 app.post("/api/messages", async (c) => {
   const user = c.get("user");
   const { conversationId, receiverId, content } = await c.req.json();
   const sql = Ys(c.env.DATABASE_URL);
-  const result = await sql`INSERT INTO messages (conversation_id, sender_id, receiver_id, content) VALUES (${parseInt(conversationId)}, ${parseInt(user.id)}, ${parseInt(receiverId)}, ${content}) RETURNING id, timestamp`;
-  return c.json({ ...result[0], id: String(result[0].id), conversation_id: String(conversationId), sender_id: String(user.id), receiver_id: String(receiverId), content });
+  const result = await sql`INSERT INTO messages (conversation_id, sender_id, receiver_id, content) VALUES (${parseInt(conversationId)}, ${parseInt(user.id)}, ${parseInt(receiverId)}, ${content}) RETURNING id, created_at`;
+  return c.json({ ...result[0], id: String(result[0].id), conversation_id: String(conversationId), sender_id: String(user.id), receiver_id: String(receiverId), content, timestamp: result[0].created_at });
 });
 var worker_default = app;
 
@@ -10711,7 +10713,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-FX4DQM/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-SwOVp1/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -10745,7 +10747,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-FX4DQM/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-SwOVp1/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

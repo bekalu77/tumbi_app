@@ -207,6 +207,14 @@ export const MoonIcon = ({ className = 'w-6 h-6' }) => (
     </svg>
 );
 
+export const ShareIcon = ({ className = 'w-6 h-6' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
+        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+        <polyline points="16 6 12 2 8 6" />
+        <line x1="12" y1="2" x2="12" y2="15" />
+    </svg>
+);
+
 export const WrenchIcon = ({ className = 'w-6 h-6' }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
@@ -219,6 +227,19 @@ export const TruckIcon = ({ className = 'w-6 h-6' }) => (
         <path d="M14 9h4l4 4v4c0 .6-.4 1-1 1h-2"/>
         <circle cx="7" cy="18" r="2"/>
         <circle cx="17" cy="18" r="2"/>
+    </svg>
+);
+
+export const EyeIcon = ({ className = 'w-6 h-6' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...iconProps} className={className}>
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+        <circle cx="12" cy="12" r="3" />
+    </svg>
+);
+
+export const VerifiedIcon = ({ className = 'w-6 h-6' }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
     </svg>
 );
 

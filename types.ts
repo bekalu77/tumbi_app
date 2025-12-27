@@ -6,6 +6,9 @@ export interface User {
   email: string;
   location: string;
   phone: string;
+  companyName?: string;
+  profileImage?: string;
+  isVerified?: boolean;
   joinedDate: Date;
 }
 
@@ -15,15 +18,21 @@ export interface Listing {
   price: number;
   unit: string;
   location: string;
-  mainCategory: string; // Renamed from listingType/category_slug
-  subCategory: string;  // Renamed from category
+  mainCategory: string;
+  subCategory: string;
   description: string;
   imageUrls: string[];
   createdAt: Date;
   sellerName: string;
   sellerId?: string;
   sellerPhone?: string;
+  sellerImage?: string;
+  sellerCompanyName?: string;
   isVerified?: boolean;
+  status?: string;
+  views?: number;
+  shareSlug?: string;
+  contactPhone?: string;
 }
 
 export interface Category {
@@ -40,6 +49,7 @@ export interface Message {
   receiver_id: string;
   content: string;
   timestamp: Date;
+  is_read?: boolean;
 }
 
 export interface ChatSession {
@@ -47,6 +57,7 @@ export interface ChatSession {
   listingId: string;
   otherUserId: string;
   otherUserName: string;
+  otherUserImage?: string;
   listingTitle: string;
   listingImage: string;
   lastMessage: string;
