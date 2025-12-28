@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, memo } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
 import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, SaveIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon, BookmarkIcon, TumbiLogo, RefreshCwIcon, ShareIcon, EyeIcon, VerifiedIcon } from './Icons';
 import { CATEGORIES, SUB_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
+import { Share } from '@capacitor/share';
 
 const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
 
@@ -355,47 +356,47 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
         ? listing.imageUrls[0] : 'https://picsum.photos/400/300?random=42';
     const { mainLabel, subLabel } = getCategoryLabel(listing.mainCategory, listing.subCategory);
   return (
-    <div onClick={onClick} className="mb-3 break-inside-avoid cursor-pointer relative group">
+    <div onClick={onClick} className="mb-0.5 cursor-pointer relative group">
       <div className="bg-white dark:bg-dark-card rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
         <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-dark-border relative">
             <img src={firstImage} alt={listing.title} className="w-full h-full object-cover" loading="lazy" />
             
             {/* Verified Badge - Top Right */}
             {listing.isVerified && (
-                <div className="absolute top-2 right-2 flex items-center px-1.5 py-0.5 bg-white/90 dark:bg-dark-card/90 rounded-full text-blue-500 shadow-sm z-10" title="Verified Seller">
-                    <span className="hidden md:inline text-[9px] font-bold mr-1 uppercase">Verified</span>
-                    <VerifiedIcon className="w-3.5 h-3.5" />
+                <div className="absolute top-1 right-1 flex items-center px-1 py-0.5 bg-white/90 dark:bg-dark-card/90 rounded-full text-blue-500 shadow-sm z-10" title="Verified Seller">
+                    <span className="hidden md:inline text-[8px] font-bold mr-1 uppercase">Verified</span>
+                    <VerifiedIcon className="w-3 h-3" />
                 </div>
             )}
 
-            {/* View Counter - Bottom Right Floating (Only visible for verified vendors) */}
+            {/* View Counter - Bottom Right Floating */}
             {listing.isVerified && (
-                <div className="absolute bottom-2 right-2 flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold z-10">
-                    <EyeIcon className="w-3 h-3" />
+                <div className="absolute bottom-1 right-1 flex items-center space-x-1 px-1 py-0.5 rounded bg-black/40 backdrop-blur-sm text-white text-[8px] font-bold z-10">
+                    <EyeIcon className="w-2.5 h-2.5" />
                     <span>{formatViews(listing.views)}</span>
                 </div>
             )}
 
             {onToggleSave && !showActions && (
-                <button onClick={onToggleSave} className="absolute top-2 left-2 p-1.5 rounded-full bg-white/80 dark:bg-dark-card/80 hover:bg-white dark:hover:bg-dark-card transition-colors z-10 shadow-sm">
-                    <BookmarkIcon className={`w-4 h-4 ${isSaved ? 'text-tumbi-600 fill-current' : 'text-gray-400 dark:text-dark-subtext'}`} filled={isSaved} />
+                <button onClick={onToggleSave} className="absolute top-1 left-1 p-1 rounded-full bg-white/80 dark:bg-dark-card/80 hover:bg-white dark:hover:bg-dark-card transition-colors z-10 shadow-sm">
+                    <BookmarkIcon className={`w-3.5 h-3.5 ${isSaved ? 'text-tumbi-600 fill-current' : 'text-gray-400 dark:text-dark-subtext'}`} filled={isSaved} />
                 </button>
             )}
             {showActions && (
-                <div className="absolute top-2 right-2 flex space-x-2 z-10">
-                    <button onClick={(e) => { e.stopPropagation(); onEdit?.(listing); }} className="p-1.5 rounded-full bg-white/90 text-gray-700 hover:bg-white shadow-sm"><SettingsIcon className="w-4 h-4" /></button>
-                    <button onClick={(e) => { e.stopPropagation(); onDelete?.(String(listing.id)); }} className="p-1.5 rounded-full bg-red-500/90 text-white hover:bg-red-500 shadow-sm"><TrashIcon className="w-4 h-4" /></button>
+                <div className="absolute top-1 right-1 flex space-x-1.5 z-10">
+                    <button onClick={(e) => { e.stopPropagation(); onEdit?.(listing); }} className="p-1 rounded-full bg-white/90 text-gray-700 hover:bg-white shadow-sm"><SettingsIcon className="w-3.5 h-3.5" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete?.(String(listing.id)); }} className="p-1 rounded-full bg-red-500/90 text-white hover:bg-red-500 shadow-sm"><TrashIcon className="w-3.5 h-3.5" /></button>
                 </div>
             )}
         </div>
-        <div className="p-3">
-          <h3 className="font-normal text-sm text-gray-800 dark:text-dark-text line-clamp-2">{listing.title}</h3>
-          <p className="text-base font-bold text-tumbi-600 dark:text-tumbi-400 mt-1">ETB {listing.price.toLocaleString()}</p>
-          <div className="text-[10px] text-gray-500 dark:text-dark-subtext mt-2 space-y-1">
-            <div className="flex items-center"><MapPinIcon className="w-3 h-3 mr-1" /><span className="truncate">{listing.location}</span></div>
+        <div className="p-1.5">
+          <h3 className="font-medium text-xs text-gray-800 dark:text-dark-text line-clamp-1 leading-tight">{listing.title}</h3>
+          <p className="text-sm font-black text-tumbi-600 dark:text-tumbi-400 mt-0.5">ETB {listing.price.toLocaleString()}</p>
+          <div className="text-[9px] text-gray-500 dark:text-dark-subtext mt-1 space-y-0.5">
+            <div className="flex items-center"><MapPinIcon className="w-2.5 h-2.5 mr-1 flex-shrink-0" /><span className="truncate">{listing.location}</span></div>
             <div className="flex flex-wrap gap-1 mt-1">
-                <span className="bg-gray-100 dark:bg-dark-border px-1.5 py-0.5 rounded text-[8px] uppercase font-bold text-gray-600 dark:text-dark-subtext">{mainLabel}</span>
-                <span className="bg-tumbi-50 dark:bg-tumbi-900/30 px-1.5 py-0.5 rounded text-[8px] uppercase font-bold text-tumbi-600 dark:text-tumbi-400 truncate max-w-[80px]">{subLabel}</span>
+                <span className="bg-gray-100 dark:bg-dark-border px-1 py-0.5 rounded-[3px] font-bold text-gray-600 dark:text-dark-subtext">{mainLabel}</span>
+                <span className="bg-tumbi-50 dark:bg-tumbi-900/30 px-1 py-0.5 rounded-[3px] font-bold text-tumbi-600 dark:text-tumbi-400 truncate">{subLabel}</span>
             </div>
           </div>
         </div>
@@ -480,7 +481,7 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white dark:bg-dark-bg rounded-xl shadow-xl w-full max-sm overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-dark-bg rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-tumbi-500 text-white">
           <h2 className="text-lg font-bold">{initialData ? 'Edit Ad' : 'Post Ad'}</h2>
           <button onClick={onClose} disabled={isSubmitting} className="p-1 hover:bg-white/20 rounded-full text-white transition-colors"><XIcon className="w-5 h-5" /></button>
@@ -934,8 +935,14 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
     const isOwner = user && String(user.id) === listing.sellerId;
     const imageUrls = Array.isArray(listing.imageUrls) ? listing.imageUrls : [];
     
-    const goToNext = () => setCurrentImageIndex(prev => (prev + 1) % imageUrls.length);
-    const goToPrev = () => setCurrentImageIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length);
+    const goToNext = () => {
+        setCurrentImageIndex(prev => (prev + 1) % imageUrls.length);
+        setTranslateX(0);
+    };
+    const goToPrev = () => {
+        setCurrentImageIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length);
+        setTranslateX(0);
+    };
     
     const handleTouchStart = (e: React.TouchEvent) => { touchStartRef.current = e.targetTouches[0].clientX; };
     const handleTouchEnd = (e: React.TouchEvent) => {
@@ -951,8 +958,18 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
     
     const handleShare = async () => {
         const shareUrl = `${window.location.origin}${window.location.pathname}?listing=${listing.shareSlug || listing.id}`;
-        const shareData = { title: `Tumbi: ${listing.title}`, text: `Check out this ${listing.title} on Tumbi marketplace!`, url: shareUrl };
-        try { if (navigator.share) await navigator.share(shareData); else { await navigator.clipboard.writeText(shareUrl); alert('Link Copied to Clipboard!'); } } catch (err) { console.error(err); }
+        try {
+            await Share.share({
+                title: `Tumbi: ${listing.title}`,
+                text: `Check out this ${listing.title} on Tumbi marketplace!`,
+                url: shareUrl,
+                dialogTitle: 'Share this listing',
+            });
+        } catch (err) {
+            // Fallback to clipboard if native share fails or is canceled
+            await navigator.clipboard.writeText(shareUrl);
+            alert('Link Copied to Clipboard!');
+        }
     };
 
     return (
@@ -966,14 +983,12 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                     onTouchStart={handleTouchStart}
                     onTouchEnd={handleTouchEnd}
                 >
-                    <div 
-                        className="flex h-full transition-transform duration-300 ease-out" 
-                        style={{ transform: `translateX(-${currentImageIndex * 100}%)`, width: `${imageUrls.length * 100}%` }}
-                    >
-                        {imageUrls.map((url, i) => (
-                            <img key={i} src={url} alt={listing.title} className="h-full object-contain" style={{ width: `${100 / imageUrls.length}%` }} />
-                        ))}
-                    </div>
+                    <img 
+                        src={imageUrls[currentImageIndex]} 
+                        alt={listing.title} 
+                        className="h-full w-full object-contain" 
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} 
+                    />
 
                     {imageUrls.length > 1 && (<>
                             <button onClick={goToPrev} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition-opacity opacity-0 group-hover:opacity-100 hidden md:block"><ChevronLeftIcon className="w-6 h-6" /></button>

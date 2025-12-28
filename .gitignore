@@ -5,6 +5,8 @@
 # Local Environment Variables
 .env*
 backend/.env
+.dev.vars
+backend/.dev.vars
 
 # Build output
 dist

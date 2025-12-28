@@ -463,9 +463,9 @@ export default function App() {
                         </div>
                     </div>
                     {(isListingsLoading && listings.length === 0) ? (
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[1,2,3,4,5,6,7,8].map(i => <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-2xl aspect-square animate-pulse"></div>)}</div>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{[1,2,3,4,5,6,7,8].map(i => <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-2xl aspect-square animate-pulse"></div>)}</div>
                     ) : listings.length > 0 ? (
-                        <><div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} />))}</div>
+                        <><div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} />))}</div>
                         <div ref={loaderRef} className="h-20 flex items-center justify-center mt-4">
                             {isLoadingMore && <div className="flex flex-col items-center"><RefreshCwIcon className="w-6 h-6 text-tumbi-600 animate-spin" /><p className="text-xs text-gray-500 mt-2 font-medium">Loading more listings...</p></div>}
                             {!hasMore && listings.length > 0 && <p className="text-sm text-gray-400 font-medium italic">No more listings to show</p>}
