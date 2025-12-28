@@ -16,10 +16,8 @@ export const formatViews = (count: number = 0) => {
 
 // --- Linkify Helper ---
 export const LinkifiedText = ({ text, className = "" }: { text: string, className?: string }) => {
-    // Regex for URLs and Phone numbers (optimized for Ethiopian and International formats)
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const phoneRegex = /(\+?251\s?\d{9}|0\d{9})/g;
-
     const parts = text.split(/((?:https?:\/\/[^\s]+)|(?:\+?251\s?\d{9}|0\d{9}))/g);
 
     return (
@@ -62,6 +60,19 @@ export const Avatar = ({ src, name, size = "md" }: { src?: string, name: string,
         </div>
     );
 };
+
+// --- Upgrade / About Modals ---
+const InfoModal = ({ title, onClose, children }: { title: string, onClose: () => void, children: React.ReactNode }) => (
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="bg-white dark:bg-dark-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <header className="bg-tumbi-500 p-4 flex justify-between items-center text-white">
+                <h2 className="font-bold text-lg">{title}</h2>
+                <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full transition-colors"><XIcon className="w-6 h-6" /></button>
+            </header>
+            <div className="p-8">{children}</div>
+        </div>
+    </div>
+);
 
 // --- Maintenance / Landing View ---
 export const MaintenanceView = ({ onRetry }: { onRetry: () => void }) => {
@@ -357,11 +368,13 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
                 </div>
             )}
 
-            {/* View Counter - Bottom Right Floating */}
-            <div className="absolute bottom-2 right-2 flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold z-10">
-                <EyeIcon className="w-3 h-3" />
-                <span>{formatViews(listing.views)}</span>
-            </div>
+            {/* View Counter - Bottom Right Floating (Only visible for verified vendors) */}
+            {listing.isVerified && (
+                <div className="absolute bottom-2 right-2 flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold z-10">
+                    <EyeIcon className="w-3 h-3" />
+                    <span>{formatViews(listing.views)}</span>
+                </div>
+            )}
 
             {onToggleSave && !showActions && (
                 <button onClick={onToggleSave} className="absolute top-2 left-2 p-1.5 rounded-full bg-white/80 dark:bg-dark-card/80 hover:bg-white dark:hover:bg-dark-card transition-colors z-10 shadow-sm">
@@ -467,7 +480,7 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white dark:bg-dark-bg rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-dark-bg rounded-xl shadow-xl w-full max-sm overflow-hidden flex flex-col max-h-[90vh]">
         <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-tumbi-500 text-white">
           <h2 className="text-lg font-bold">{initialData ? 'Edit Ad' : 'Post Ad'}</h2>
           <button onClick={onClose} disabled={isSubmitting} className="p-1 hover:bg-white/20 rounded-full text-white transition-colors"><XIcon className="w-5 h-5" /></button>
@@ -707,7 +720,10 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
 // --- Profile View ---
 export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode, onEditListing, onDeleteListing, onEditProfile }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean, onEditListing: (listing: Listing) => void, onDeleteListing: (id: string) => void, onEditProfile: () => void }) => {
     const [subPage, setSubPage] = useState<'main' | 'my-listings'>('main');
+    const [infoModal, setInfoModal] = useState<'upgrade' | 'about' | null>(null);
+    
     const myListings = listings.filter(l => l.sellerId === String(user.id));
+    
     if (subPage === 'my-listings') {
         return (
             <div className="max-w-4xl mx-auto p-4 pb-24">
@@ -717,8 +733,57 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
             </div>
         );
     }
+
     return (
         <div className="max-w-4xl mx-auto p-4 pb-24">
+            {/* Info Modals */}
+            {infoModal === 'upgrade' && (
+                <InfoModal title="Upgrade to Pro" onClose={() => setInfoModal(null)}>
+                    <div className="text-center space-y-6">
+                        <div className="w-20 h-20 bg-tumbi-100 rounded-2xl flex items-center justify-center mx-auto">
+                            <VerifiedIcon className="w-12 h-12 text-tumbi-600" />
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-xl font-bold">Become a Verified Vendor</h3>
+                            <p className="text-gray-600 dark:text-dark-subtext text-sm">Get the blue checkmark, prioritize your listings in search, and build trust with your customers.</p>
+                        </div>
+                        <div className="space-y-3 pt-4">
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Contact our team to upgrade</p>
+                            <div className="grid grid-cols-1 gap-3">
+                                <a href="https://wa.me/251911289217?text=Hi%20Tumbi%20Team,%20I%20want%20to%20upgrade%20my%20account%20to%20Pro." target="_blank" className="flex items-center justify-center p-4 bg-[#25D366] text-white rounded-xl font-bold hover:opacity-90 transition-opacity">
+                                    <MessageCircleIcon className="w-5 h-5 mr-2" /> WhatsApp Support
+                                </a>
+                                <a href="https://t.me/niqusolutions" target="_blank" className="flex items-center justify-center p-4 bg-[#0088cc] text-white rounded-xl font-bold hover:opacity-90 transition-opacity">
+                                    <RefreshCwIcon className="w-5 h-5 mr-2 rotate-45" /> Telegram Support
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </InfoModal>
+            )}
+
+            {infoModal === 'about' && (
+                <InfoModal title="About Tumbi" onClose={() => setInfoModal(null)}>
+                    <div className="space-y-6">
+                        <div className="flex items-center space-x-4">
+                            <TumbiLogo className="w-16 h-16 rounded-xl" />
+                            <div>
+                                <h3 className="text-lg font-bold">Tumbi Marketplace</h3>
+                                <p className="text-xs text-gray-500">Version 1.0.0 (Global)</p>
+                            </div>
+                        </div>
+                        <div className="space-y-4 text-sm text-gray-600 dark:text-dark-subtext leading-relaxed">
+                            <p>Tumbi is a specialized creative marketplace developed by <strong>Niqu PLC</strong> Mother Company and the <strong>Niqu Online Solutions</strong> team.</p>
+                            <p>We are a creative software agency working across multiple fields to bring modern digital solutions to life. If you have questions about Tumbi's functionality, need technical help, or wish to develop custom software for your own business, please reach out to us.</p>
+                            <div className="bg-gray-50 dark:bg-dark-bg p-4 rounded-xl border border-gray-100 dark:border-dark-border space-y-2">
+                                <p className="flex items-center"><MapPinIcon className="w-4 h-4 mr-2 text-tumbi-500" /> Bole sub city, Mebrathaile, infront of the taxi station</p>
+                                <p className="flex items-center"><PhoneIcon className="w-4 h-4 mr-2 text-tumbi-500" /> +251 911 28 92 17</p>
+                            </div>
+                        </div>
+                    </div>
+                </InfoModal>
+            )}
+
             <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-100 dark:border-dark-border p-6 mb-6">
                 <div className="flex items-center space-x-4">
                     <Avatar src={user.profileImage} name={user.name} size="xl" />
@@ -738,6 +803,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
                     <button onClick={onEditProfile} className="p-2 bg-gray-50 dark:bg-dark-bg rounded-full text-gray-500 hover:text-tumbi-600 transition-colors"><SettingsIcon className="w-5 h-5" /></button>
                 </div>
             </div>
+            
             <div className="space-y-2">
                 <button onClick={() => setSubPage('my-listings')} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 font-medium text-gray-700 dark:text-dark-text group">
                     <div className="flex items-center"><HammerIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> My Listings</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
@@ -749,6 +815,15 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
                     <div className="flex items-center">{isDarkMode ? <SunIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-yellow-500" /> : <MoonIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" />} Toggle Theme</div>
                     <div className={`w-10 h-5 rounded-full relative transition-colors ${isDarkMode ? 'bg-tumbi-500' : 'bg-gray-200'}`}><div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${isDarkMode ? 'right-0.5' : 'left-0.5'}`}></div></div>
                 </button>
+                
+                {/* New Buttons */}
+                <button onClick={() => setInfoModal('upgrade')} className="w-full flex items-center justify-between p-4 bg-tumbi-50 dark:bg-tumbi-900/20 rounded-lg border border-tumbi-100 dark:border-tumbi-800/30 hover:bg-tumbi-100 font-bold text-tumbi-700 dark:text-tumbi-400 group transition-colors">
+                    <div className="flex items-center"><VerifiedIcon className="w-5 h-5 mr-3 text-tumbi-500" /> Upgrade to Pro</div><ChevronRightIcon className="w-5 h-5 opacity-50" />
+                </button>
+                <button onClick={() => setInfoModal('about')} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 font-medium text-gray-700 dark:text-dark-text group">
+                    <div className="flex items-center"><HelpCircleIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> About Tumbi</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
+                </button>
+
                 <div className="pt-4 mt-4 border-t border-gray-100 dark:border-dark-border">
                     <button onClick={onLogout} className="w-full flex items-center p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 transition-colors font-medium text-red-600"><LogOutIcon className="w-5 h-5 mr-3" /> Log Out</button>
                 </div>
@@ -763,6 +838,7 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const touchStartRef = useRef<number>(0);
     
     const loadMessages = async () => {
         const token = localStorage.getItem('token');
@@ -790,45 +866,18 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
         if (!content || !user || !token || isSending) return;
 
         setIsSending(true);
-        // Optimistic UI update
-        const optimisticMsg: Message = { 
-            id: 'temp-' + Date.now(), 
-            conversation_id: session.conversationId, 
-            sender_id: user.id, 
-            receiver_id: session.otherUserId, 
-            content: content, 
-            timestamp: new Date() 
-        };
+        const optimisticMsg: Message = { id: 'temp-' + Date.now(), conversation_id: session.conversationId, sender_id: user.id, receiver_id: session.otherUserId, content: content, timestamp: new Date() };
         setMessages(prev => [...prev, optimisticMsg]);
         setNewMessage('');
 
         try {
-             const res = await fetch(`${API_URL}/api/messages`, { 
-                 method: 'POST', 
-                 headers: { 
-                     'Content-Type': 'application/json', 
-                     'x-access-token': token 
-                 }, 
-                 body: JSON.stringify({ 
-                     conversationId: parseInt(session.conversationId), 
-                     receiverId: parseInt(session.otherUserId), 
-                     content: content 
-                 }) 
-             });
-             
-             if (!res.ok) {
-                 const data = await res.json();
-                 throw new Error(data.message || 'Failed to send');
-             }
-             
-             // Refresh to get the real message with ID and timestamp from server
+             const res = await fetch(`${API_URL}/api/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token }, body: JSON.stringify({ conversationId: parseInt(session.conversationId), receiverId: parseInt(session.otherUserId), content: content }) });
+             if (!res.ok) throw new Error('Failed');
              await loadMessages();
         } catch (error) { 
-            console.error("Message send error:", error);
-            // Rollback optimistic update on failure
             setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id)); 
             setNewMessage(content); 
-            alert("Failed to send message. Please try again.");
+            alert("Failed to send message.");
         } finally {
             setIsSending(false);
         }
@@ -856,24 +905,9 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
                  })}
             </div>
             <div className="p-4 border-t dark:border-dark-border bg-white dark:bg-dark-card flex items-center space-x-2">
-                <input 
-                    className="flex-grow border border-gray-300 dark:border-dark-border rounded-full px-5 py-2.5 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none transition-all disabled:opacity-50" 
-                    placeholder={isSending ? "Sending..." : "Type a message..."}
-                    value={newMessage} 
-                    onChange={e => setNewMessage(e.target.value)} 
-                    onKeyDown={e => e.key === 'Enter' && handleSend()}
-                    disabled={isSending}
-                />
-                <button 
-                    onClick={handleSend} 
-                    disabled={!newMessage.trim() || isSending} 
-                    className="p-3 bg-tumbi-600 rounded-full text-white disabled:opacity-50 hover:bg-tumbi-700 active:scale-95 transition-all flex-shrink-0"
-                >
-                    {isSending ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                        <ArrowLeftIcon className="w-5 h-5 rotate-180" />
-                    )}
+                <input className="flex-grow border border-gray-300 dark:border-dark-border rounded-full px-5 py-2.5 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none transition-all disabled:opacity-50" placeholder={isSending ? "Sending..." : "Type a message..."} value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} disabled={isSending} />
+                <button onClick={handleSend} disabled={!newMessage.trim() || isSending} className="p-3 bg-tumbi-600 rounded-full text-white disabled:opacity-50 hover:bg-tumbi-700 active:scale-95 transition-all flex-shrink-0">
+                    {isSending ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <ArrowLeftIcon className="w-5 h-5 rotate-180" />}
                 </button>
             </div>
         </div>
@@ -882,6 +916,9 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
 
 // --- Detail View ---
 export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdit, onChat, onOpenVendor }: { listing: Listing | null; onBack: () => void; isSaved: boolean; onToggleSave: (id: string) => void; user: User | null; onEdit: (listing: Listing) => void; onChat: (listing: Listing) => void; onOpenVendor?: (id: string) => void; }) => {
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const touchStartRef = useRef<number>(0);
+
     if (!listing) {
         return (
             <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -895,10 +932,21 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
     }
 
     const isOwner = user && String(user.id) === listing.sellerId;
-    const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const imageUrls = Array.isArray(listing.imageUrls) ? listing.imageUrls : [];
+    
     const goToNext = () => setCurrentImageIndex(prev => (prev + 1) % imageUrls.length);
     const goToPrev = () => setCurrentImageIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length);
+    
+    const handleTouchStart = (e: React.TouchEvent) => { touchStartRef.current = e.targetTouches[0].clientX; };
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        const touchEnd = e.changedTouches[0].clientX;
+        const diff = touchStartRef.current - touchEnd;
+        if (Math.abs(diff) > 50) {
+            if (diff > 0) goToNext();
+            else goToPrev();
+        }
+    };
+
     const { mainLabel, subLabel } = getCategoryLabel(listing.mainCategory, listing.subCategory);
     
     const handleShare = async () => {
@@ -911,26 +959,46 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200 backdrop-blur-sm">
             <div className="bg-white dark:bg-dark-bg w-full max-w-4xl max-h-[95vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative">
                 <button onClick={onBack} className="absolute top-4 right-4 z-50 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors backdrop-blur-sm"><XIcon className="w-5 h-5" /></button>
-                <div className="w-full md:w-3/5 h-[35vh] md:h-auto bg-black relative group flex-shrink-0">
-                    {imageUrls.length > 0 && <img src={imageUrls[currentImageIndex]} alt={listing.title} className="w-full h-full object-contain" />}
+                
+                {/* Image Section with Swipe */}
+                <div 
+                    className="w-full md:w-3/5 h-[35vh] md:h-auto bg-black relative group flex-shrink-0 overflow-hidden"
+                    onTouchStart={handleTouchStart}
+                    onTouchEnd={handleTouchEnd}
+                >
+                    <div 
+                        className="flex h-full transition-transform duration-300 ease-out" 
+                        style={{ transform: `translateX(-${currentImageIndex * 100}%)`, width: `${imageUrls.length * 100}%` }}
+                    >
+                        {imageUrls.map((url, i) => (
+                            <img key={i} src={url} alt={listing.title} className="h-full object-contain" style={{ width: `${100 / imageUrls.length}%` }} />
+                        ))}
+                    </div>
+
                     {imageUrls.length > 1 && (<>
-                            <button onClick={goToPrev} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition-opacity opacity-0 group-hover:opacity-100"><ChevronLeftIcon className="w-6 h-6" /></button>
-                            <button onClick={goToNext} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition-opacity opacity-0 group-hover:opacity-100"><ChevronRightIcon className="w-6 h-6" /></button>
-                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">{imageUrls.map((_, index) => (<div key={index} className={`w-2 h-2 rounded-full transition-all ${currentImageIndex === index ? 'bg-white w-4' : 'bg-white/50'}`}></div>))}</div>
+                            <button onClick={goToPrev} className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition-opacity opacity-0 group-hover:opacity-100 hidden md:block"><ChevronLeftIcon className="w-6 h-6" /></button>
+                            <button onClick={goToNext} className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition-opacity opacity-0 group-hover:opacity-100 hidden md:block"><ChevronRightIcon className="w-6 h-6" /></button>
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 bg-black/20 px-2 py-1 rounded-full backdrop-blur-sm">
+                                {imageUrls.map((_, index) => (<div key={index} className={`w-1.5 h-1.5 rounded-full transition-all ${currentImageIndex === index ? 'bg-white w-4' : 'bg-white/50'}`}></div>))}
+                            </div>
                         </>)}
                 </div>
+
                 <div className="flex-1 flex flex-col bg-white dark:bg-dark-card overflow-hidden">
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between"><div className="flex flex-wrap gap-1.5"><span className="px-2 py-1 bg-gray-100 dark:bg-dark-border text-gray-600 text-[9px] font-bold uppercase rounded">{mainLabel}</span><span className="px-2 py-1 bg-tumbi-100 dark:bg-tumbi-900/30 text-tumbi-700 text-[9px] font-bold uppercase rounded">{subLabel}</span></div>
+                            <div className="flex items-center justify-between"><div className="flex wrap gap-1.5"><span className="px-2 py-1 bg-gray-100 dark:bg-dark-border text-gray-600 text-[9px] font-bold uppercase rounded">{mainLabel}</span><span className="px-2 py-1 bg-tumbi-100 dark:bg-tumbi-900/30 text-tumbi-700 text-[9px] font-bold uppercase rounded">{subLabel}</span></div>
                                 <div className="flex items-center space-x-2"><button onClick={handleShare} className="p-2 rounded-full bg-gray-100 dark:bg-dark-border hover:bg-tumbi-50 transition-colors"><ShareIcon className="w-5 h-5" /></button><button onClick={() => onToggleSave(String(listing.id))} className={`p-2 rounded-full transition-colors ${isSaved ? 'bg-tumbi-50 text-tumbi-600' : 'hover:bg-gray-100 text-gray-400'}`}><BookmarkIcon className="w-6 h-6" filled={isSaved} /></button></div></div>
                             <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text leading-tight">{listing.title}</h1>
                             <div className="flex items-center space-x-2">
                                 <div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">ETB {listing.price.toLocaleString()}</div>
-                                <div className="flex items-center space-x-1 px-2 py-1 bg-gray-100 dark:bg-dark-bg rounded-lg text-gray-500 dark:text-dark-subtext text-xs font-bold">
-                                    <EyeIcon className="w-3.5 h-3.5" />
-                                    <span>{formatViews(listing.views)} Views</span>
-                                </div>
+                                {/* View Counter (Only for Verified Vendors) */}
+                                {listing.isVerified && (
+                                    <div className="flex items-center space-x-1 px-2 py-1 bg-gray-100 dark:bg-dark-bg rounded-lg text-gray-500 dark:text-dark-subtext text-xs font-bold">
+                                        <EyeIcon className="w-3.5 h-3.5" />
+                                        <span>{formatViews(listing.views)} Views</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-dark-bg rounded-xl"><MapPinIcon className="w-4 h-4 text-gray-400" /><span className="text-sm font-medium text-gray-600 dark:text-dark-subtext">{listing.location}</span></div>
