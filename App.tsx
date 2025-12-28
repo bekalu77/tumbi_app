@@ -59,32 +59,47 @@ export default function App() {
   const handleIncomingUrl = useCallback((urlStr: string) => {
     try {
         const url = new URL(urlStr);
-        const listingId = url.searchParams.get('listing');
-        if (listingId) {
-            openListing(listingId, false); // false = don't push state again
+        const listingParam = url.searchParams.get('listing');
+        if (listingParam) {
+            openListing(listingParam, false);
         }
     } catch (e) {
         console.error("Failed to parse incoming URL", e);
     }
   }, []);
 
-  const openListing = async (id: string, pushState = true) => { 
-    setSelectedListingId(id.toString()); 
+  const openListing = async (idOrSlug: string, pushState = true) => { 
+    // Show details view immediately to provide feedback
     setViewState('details');
     
-    // Sync URL for sharing
-    if (pushState) {
-        const newUrl = `${window.location.origin}${window.location.pathname}?listing=${id}`;
-        window.history.pushState({ listingId: id }, '', newUrl);
+    let targetId = idOrSlug;
+
+    // Check if it's a slug (contains non-digits)
+    if (isNaN(Number(idOrSlug))) {
+        try {
+            const res = await fetch(`${API_URL}/api/share/${idOrSlug}`);
+            if (res.ok) {
+                const data = await res.json();
+                targetId = data.id;
+            }
+        } catch (e) { console.error("Slug resolution failed", e); }
     }
 
+    setSelectedListingId(targetId.toString()); 
+    
+    if (pushState) {
+        const newUrl = `${window.location.origin}${window.location.pathname}?listing=${idOrSlug}`;
+        window.history.pushState({ listingId: idOrSlug }, '', newUrl);
+    }
+
+    // Always fetch latest data to increment views and ensure data exists locally
     try {
-        const response = await fetch(`${API_URL}/api/listings/${id}`, { cache: 'no-store' });
+        const response = await fetch(`${API_URL}/api/listings/${targetId}`, { cache: 'no-store' });
         if (response.ok) {
             const data = await response.json();
             setListings(prev => {
-                const exists = prev.find(l => String(l.id) === String(id));
-                if (exists) return prev.map(l => String(l.id) === String(id) ? { ...l, ...data } : l);
+                const exists = prev.find(l => String(l.id) === String(targetId));
+                if (exists) return prev.map(l => String(l.id) === String(targetId) ? { ...l, ...data } : l);
                 return [data, ...prev];
             });
         }
@@ -96,12 +111,10 @@ export default function App() {
   const closeListing = () => {
     setViewState('home');
     setSelectedListingId(null);
-    // Clear URL parameter
     const cleanUrl = `${window.location.origin}${window.location.pathname}`;
     window.history.pushState({}, '', cleanUrl);
   };
 
-  // Listen for browser back button to close modal
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
         if (event.state?.listingId) {
@@ -115,26 +128,13 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Listen for Capacitor App Open (Deep Links)
   useEffect(() => {
     CapApp.addListener('appUrlOpen', (data: any) => {
         handleIncomingUrl(data.url);
     });
   }, [handleIncomingUrl]);
 
-  // --- Existing Logic ---
-  useEffect(() => {
-    if (!hasClearedCache.current) {
-        const persistentKeys = ['token', 'user', 'theme'];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && !persistentKeys.includes(key)) localStorage.removeItem(key);
-        }
-        sessionStorage.clear();
-        hasClearedCache.current = true;
-    }
-  }, []);
-
+  // --- Core Fetching Logic ---
   const fetchListings = useCallback(async (currentOffset: number, filters = appliedFilters, clearExisting = false) => {
     try {
       if (currentOffset === 0) setIsListingsLoading(true);
@@ -252,7 +252,7 @@ export default function App() {
         setIsDarkMode(true);
       }
 
-      // Handle Initial URL
+      // Initial URL check for shared links
       handleIncomingUrl(window.location.href);
     };
     initApp();
@@ -416,7 +416,7 @@ export default function App() {
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} />}
         {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleUpdateProfile} />}
         {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} />}
-        {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === selectedListingId)!} onBack={closeListing} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={startEditListing} onChat={openChat} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} />}
+        {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === selectedListingId) || null} onBack={closeListing} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={startEditListing} onChat={openChat} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} />}
         {viewState === 'vendor-profile' && selectedVendorId && <VendorProfileView vendorId={selectedVendorId} listings={listings} onBack={() => setViewState('details')} onOpenListing={openListing} />}
         {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isListingsLoading} />}
         
@@ -443,7 +443,7 @@ export default function App() {
                         <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>
                             {CATEGORIES.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}
                         </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}>
+                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-500 appearance-none cursor-pointer" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}>
                             <option value="all">Sub-Categories</option>{selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}
                         </select>
                     </div>

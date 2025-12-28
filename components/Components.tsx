@@ -6,6 +6,14 @@ import { CATEGORIES, SUB_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from 
 
 const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
 
+// --- Number Formatter ---
+export const formatViews = (count: number = 0) => {
+    if (count >= 1000) {
+        return (count / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    }
+    return count.toString();
+};
+
 // --- Linkify Helper ---
 export const LinkifiedText = ({ text, className = "" }: { text: string, className?: string }) => {
     // Regex for URLs and Phone numbers (optimized for Ethiopian and International formats)
@@ -15,7 +23,7 @@ export const LinkifiedText = ({ text, className = "" }: { text: string, classNam
     const parts = text.split(/((?:https?:\/\/[^\s]+)|(?:\+?251\s?\d{9}|0\d{9}))/g);
 
     return (
-        <p className={className}>
+        <div className={className}>
             {parts.map((part, i) => {
                 if (part.match(urlRegex)) {
                     return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-tumbi-600 dark:text-tumbi-400 hover:underline break-all">{part}</a>;
@@ -26,7 +34,7 @@ export const LinkifiedText = ({ text, className = "" }: { text: string, classNam
                 }
                 return part;
             })}
-        </p>
+        </div>
     );
 };
 
@@ -352,7 +360,7 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
             {/* View Counter - Bottom Right Floating */}
             <div className="absolute bottom-2 right-2 flex items-center space-x-1 px-1.5 py-0.5 rounded-md bg-black/40 backdrop-blur-sm text-white text-[10px] font-bold z-10">
                 <EyeIcon className="w-3 h-3" />
-                <span>{listing.views || 0}</span>
+                <span>{formatViews(listing.views)}</span>
             </div>
 
             {onToggleSave && !showActions && (
@@ -570,7 +578,7 @@ export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClos
                             <input required placeholder="Full Name" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
                         <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Company Name (Optional)</label>
                             <input placeholder="Sunshine Construction" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address</label>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address (Optional)</label>
                             <input type="email" placeholder="Email Address" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
                         <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Location</label>
                             <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none cursor-pointer" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
@@ -873,18 +881,32 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
 };
 
 // --- Detail View ---
-export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdit, onChat, onOpenVendor }: { listing: Listing; onBack: () => void; isSaved: boolean; onToggleSave: (id: string) => void; user: User | null; onEdit: (listing: Listing) => void; onChat: (listing: Listing) => void; onOpenVendor?: (id: string) => void; }) => {
+export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdit, onChat, onOpenVendor }: { listing: Listing | null; onBack: () => void; isSaved: boolean; onToggleSave: (id: string) => void; user: User | null; onEdit: (listing: Listing) => void; onChat: (listing: Listing) => void; onOpenVendor?: (id: string) => void; }) => {
+    if (!listing) {
+        return (
+            <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="bg-white dark:bg-dark-bg w-full max-w-lg rounded-2xl p-12 flex flex-col items-center justify-center space-y-4">
+                    <RefreshCwIcon className="w-10 h-10 text-tumbi-600 animate-spin" />
+                    <p className="text-gray-500 dark:text-dark-subtext font-bold uppercase tracking-widest text-xs">Loading Details...</p>
+                    <button onClick={onBack} className="text-tumbi-600 font-bold hover:underline">Cancel</button>
+                </div>
+            </div>
+        );
+    }
+
     const isOwner = user && String(user.id) === listing.sellerId;
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const imageUrls = Array.isArray(listing.imageUrls) ? listing.imageUrls : [];
     const goToNext = () => setCurrentImageIndex(prev => (prev + 1) % imageUrls.length);
     const goToPrev = () => setCurrentImageIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length);
     const { mainLabel, subLabel } = getCategoryLabel(listing.mainCategory, listing.subCategory);
+    
     const handleShare = async () => {
-        const shareUrl = `${window.location.origin}?listing=${listing.id}`;
+        const shareUrl = `${window.location.origin}${window.location.pathname}?listing=${listing.shareSlug || listing.id}`;
         const shareData = { title: `Tumbi: ${listing.title}`, text: `Check out this ${listing.title} on Tumbi marketplace!`, url: shareUrl };
-        try { if (navigator.share) await navigator.share(shareData); else { await navigator.clipboard.writeText(shareUrl); alert('Copied!'); } } catch (err) { console.error(err); }
+        try { if (navigator.share) await navigator.share(shareData); else { await navigator.clipboard.writeText(shareUrl); alert('Link Copied to Clipboard!'); } } catch (err) { console.error(err); }
     };
+
     return (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200 backdrop-blur-sm">
             <div className="bg-white dark:bg-dark-bg w-full max-w-4xl max-h-[95vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative">
@@ -902,7 +924,14 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                         <div className="space-y-2">
                             <div className="flex items-center justify-between"><div className="flex flex-wrap gap-1.5"><span className="px-2 py-1 bg-gray-100 dark:bg-dark-border text-gray-600 text-[9px] font-bold uppercase rounded">{mainLabel}</span><span className="px-2 py-1 bg-tumbi-100 dark:bg-tumbi-900/30 text-tumbi-700 text-[9px] font-bold uppercase rounded">{subLabel}</span></div>
                                 <div className="flex items-center space-x-2"><button onClick={handleShare} className="p-2 rounded-full bg-gray-100 dark:bg-dark-border hover:bg-tumbi-50 transition-colors"><ShareIcon className="w-5 h-5" /></button><button onClick={() => onToggleSave(String(listing.id))} className={`p-2 rounded-full transition-colors ${isSaved ? 'bg-tumbi-50 text-tumbi-600' : 'hover:bg-gray-100 text-gray-400'}`}><BookmarkIcon className="w-6 h-6" filled={isSaved} /></button></div></div>
-                            <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text leading-tight">{listing.title}</h1><div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">ETB {listing.price.toLocaleString()}</div>
+                            <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text leading-tight">{listing.title}</h1>
+                            <div className="flex items-center space-x-2">
+                                <div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">ETB {listing.price.toLocaleString()}</div>
+                                <div className="flex items-center space-x-1 px-2 py-1 bg-gray-100 dark:bg-dark-bg rounded-lg text-gray-500 dark:text-dark-subtext text-xs font-bold">
+                                    <EyeIcon className="w-3.5 h-3.5" />
+                                    <span>{formatViews(listing.views)} Views</span>
+                                </div>
+                            </div>
                         </div>
                         <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-dark-bg rounded-xl"><MapPinIcon className="w-4 h-4 text-gray-400" /><span className="text-sm font-medium text-gray-600 dark:text-dark-subtext">{listing.location}</span></div>
                         <div className="space-y-3"><h3 className="font-bold text-sm uppercase text-gray-400 tracking-widest">Description</h3>

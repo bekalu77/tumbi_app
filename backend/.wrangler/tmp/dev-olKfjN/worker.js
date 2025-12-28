@@ -34,7 +34,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// .wrangler/tmp/bundle-lsMKCL/checked-fetch.js
+// .wrangler/tmp/bundle-5foKHw/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -52,7 +52,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-lsMKCL/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-5foKHw/checked-fetch.js"() {
     "use strict";
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
@@ -1910,11 +1910,11 @@ var require_bcrypt = __commonJS({
   }
 });
 
-// .wrangler/tmp/bundle-lsMKCL/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-5foKHw/middleware-loader.entry.ts
 init_checked_fetch();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-lsMKCL/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-5foKHw/middleware-insertion-facade.js
 init_checked_fetch();
 init_modules_watch_stub();
 
@@ -10420,6 +10420,11 @@ function validateUsername(name) {
   return /^[a-zA-Z0-9. ]+$/.test(name);
 }
 __name(validateUsername, "validateUsername");
+function generateShareSlug(title, id) {
+  const cleanTitle = title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return `${cleanTitle}-${id}`;
+}
+__name(generateShareSlug, "generateShareSlug");
 app.use("/*", cors({
   origin: "*",
   allowHeaders: ["Content-Type", "x-access-token", "Authorization"],
@@ -10432,7 +10437,7 @@ app.onError((err, c) => {
 app.use("/api/*", async (c, next) => {
   const path = c.req.path;
   const method = c.req.method;
-  const isPublic = path === "/api/register" && method === "POST" || path === "/api/login" && method === "POST" || path === "/api/listings" && method === "GET" || path === "/api/upload" && method === "POST" || path.match(/^\/api\/listings\/\d+$/) && method === "GET" || method === "OPTIONS";
+  const isPublic = path === "/api/register" && method === "POST" || path === "/api/login" && method === "POST" || path === "/api/listings" && method === "GET" || path === "/api/upload" && method === "POST" || path.match(/^\/api\/listings\/\d+$/) && method === "GET" || path.match(/^\/api\/share\/[a-z0-9-]+$/) && method === "GET" || method === "OPTIONS";
   if (isPublic) return await next();
   const authHeader = c.req.header("x-access-token");
   if (!authHeader) return c.json({ message: "No token provided" }, 401);
@@ -10571,7 +10576,17 @@ app.get("/api/listings/:id", async (c) => {
   const increments = [3, 5, 7, 9];
   const randomIncrement = increments[Math.floor(Math.random() * increments.length)];
   try {
-    await sql`UPDATE listings SET views = views + ${randomIncrement} WHERE id = ${parseInt(id)}`;
+    await sql`
+            UPDATE listings 
+            SET views = views + (
+                CASE 
+                    WHEN u.is_verified = TRUE THEN ${randomIncrement}
+                    ELSE 1 
+                END
+            )
+            FROM users u 
+            WHERE listings.user_id = u.id AND listings.id = ${parseInt(id)}
+        `;
   } catch (e) {
   }
   const rows = await sql`
@@ -10593,6 +10608,13 @@ app.get("/api/listings/:id", async (c) => {
     isVerified: r.isVerified
   });
 });
+app.get("/api/share/:slug", async (c) => {
+  const slug = c.req.param("slug");
+  const sql = Ys(c.env.DATABASE_URL);
+  const rows = await sql`SELECT id FROM listings WHERE share_slug = ${slug}`;
+  if (!rows.length) return c.json({ message: "Not found" }, 404);
+  return c.json({ id: String(rows[0].id) });
+});
 app.post("/api/listings", async (c) => {
   const user = c.get("user");
   const { title, price, unit, location, mainCategory, subCategory, description, imageUrls, contactPhone } = await c.req.json();
@@ -10600,21 +10622,26 @@ app.post("/api/listings", async (c) => {
   const result = await sql`
         INSERT INTO listings (title, price, unit, location, main_category, sub_category, description, image_url, user_id, contact_phone) 
         VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageUrls.join(",")}, ${parseInt(user.id)}, ${contactPhone || null}) 
-        RETURNING *
+        RETURNING id
     `;
-  return c.json({ ...result[0], id: String(result[0].id) });
+  const newId = result[0].id;
+  const shareSlug = generateShareSlug(title, newId);
+  const final = await sql`UPDATE listings SET share_slug = ${shareSlug} WHERE id = ${newId} RETURNING *`;
+  return c.json({ ...final[0], id: String(final[0].id) });
 });
 app.put("/api/listings/:id", async (c) => {
   const user = c.get("user");
   const id = c.req.param("id");
   const { title, price, unit, location, mainCategory, subCategory, description, imageUrls, status, contactPhone } = await c.req.json();
   const sql = Ys(c.env.DATABASE_URL);
+  const shareSlug = generateShareSlug(title, parseInt(id));
   const result = await sql`
         UPDATE listings SET 
             title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
             main_category = ${mainCategory}, sub_category = ${subCategory}, 
             description = ${description}, image_url = ${imageUrls.join(",")}, 
-            status = ${status || "active"}, contact_phone = ${contactPhone || null} 
+            status = ${status || "active"}, contact_phone = ${contactPhone || null},
+            share_slug = ${shareSlug}
         WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} 
         RETURNING *
     `;
@@ -10866,7 +10893,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-lsMKCL/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-5foKHw/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -10900,7 +10927,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-lsMKCL/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-5foKHw/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
