@@ -50,6 +50,11 @@ function getLoginVariants(input: any): string[] {
     return Array.from(variants).filter(v => v.length >= 9);
 }
 
+function validateUsername(name: string): boolean {
+    // Only allow letters, numbers, dots, and spaces. No emojis or other special characters.
+    return /^[a-zA-Z0-9. ]+$/.test(name);
+}
+
 // --- MIDDLEWARE ---
 app.use('/*', cors({
   origin: '*', 
@@ -101,6 +106,11 @@ app.post('/api/register', async (c) => {
         
         if (!name || !phone || !password) {
             return c.json({ message: 'Name, phone, and password are required' }, 400);
+        }
+
+        // Validate username (name)
+        if (!validateUsername(name)) {
+            return c.json({ message: 'Username can only contain letters, numbers, spaces, and dots (.)' }, 400);
         }
 
         const normPhone = normalizePhoneForStorage(phone);
@@ -190,6 +200,7 @@ app.get('/api/listings', async (c) => {
     if (city && city !== 'All Cities') { params.push(city); query += ` AND l.location = $${params.length}`; }
     if (search) { params.push(`%${search.toLowerCase()}%`); query += ` AND (LOWER(l.title) LIKE $${params.length} OR LOWER(l.description) LIKE $${params.length})`; }
 
+    // Prioritize verified users, then apply selected sort
     let orderClause = ` ORDER BY u.is_verified DESC`;
     if (sortBy === 'price-asc') orderClause += `, l.price ASC`;
     else if (sortBy === 'price-desc') orderClause += `, l.price DESC`;
@@ -197,6 +208,7 @@ app.get('/api/listings', async (c) => {
     else orderClause += `, l.id DESC`; 
 
     query += orderClause;
+
     params.push(limit); query += ` LIMIT $${params.length}`;
     params.push(offset); query += ` OFFSET $${params.length}`;
 
@@ -217,6 +229,7 @@ app.get('/api/listings/:id', async (c) => {
     const id = c.req.param('id');
     const sql = neon(c.env.DATABASE_URL);
     
+    // Increment views by a random amount: 3, 5, 7, or 9
     const increments = [3, 5, 7, 9];
     const randomIncrement = increments[Math.floor(Math.random() * increments.length)];
     try { 
@@ -310,13 +323,46 @@ app.delete('/api/saved/:id', async (c) => {
 // --- PROFILE ---
 app.get('/api/users/me', async (c) => c.json(c.get('user')));
 app.put('/api/users/me', async (c) => {
-    const user = c.get('user');
-    const { name, email, location, profileImage, companyName } = await c.req.json();
-    const sql = neon(c.env.DATABASE_URL);
-    const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${parseInt(user.id)}`;
-    if (existing.length) return c.json({ message: 'Email in use' }, 409);
-    await sql`UPDATE users SET name = ${name}, email = ${email}, location = ${location}, profile_image = ${profileImage}, company_name = ${companyName} WHERE id = ${parseInt(user.id)}`;
-    return c.json({ message: 'Updated' });
+    try {
+        const user = c.get('user');
+        const { name, email, phone, location, profileImage, companyName } = await c.req.json();
+        const sql = neon(c.env.DATABASE_URL);
+        const userId = parseInt(String(user.id));
+
+        if (name && !validateUsername(name)) {
+            return c.json({ message: 'Username can only contain letters, numbers, spaces, and dots (.)' }, 400);
+        }
+
+        // 1. Check Email Uniqueness (excluding current user)
+        const cleanEmail = (email && String(email).trim() !== '') ? String(email).trim().toLowerCase() : null;
+        if (cleanEmail) {
+            const emailExisting = await sql`SELECT id FROM users WHERE email IS NOT NULL AND LOWER(email) = ${cleanEmail} AND id != ${userId}`;
+            if (emailExisting.length) return c.json({ message: 'Email already in use by another account' }, 409);
+        }
+
+        // 2. Check Phone Uniqueness (excluding current user)
+        const normPhone = normalizePhoneForStorage(phone);
+        if (normPhone) {
+            const variants = getLoginVariants(phone);
+            const phoneExisting = await sql`SELECT id FROM users WHERE (phone = ANY(${variants}) OR phone = ${normPhone}) AND id != ${userId}`;
+            if (phoneExisting.length) return c.json({ message: 'Phone number already in use by another account' }, 409);
+        }
+
+        await sql`
+            UPDATE users SET 
+                name = ${name}, 
+                email = ${cleanEmail}, 
+                phone = ${normPhone || user.phone}, 
+                location = ${location}, 
+                profile_image = ${profileImage}, 
+                company_name = ${companyName} 
+            WHERE id = ${userId}
+        `;
+        
+        return c.json({ message: 'Updated' });
+    } catch (e: any) {
+        return c.json({ message: e.message || 'Update failed' }, 500);
+    }
 });
 
 // --- UPLOAD ---
@@ -351,6 +397,7 @@ app.post('/api/conversations', async (c) => {
         if (!listingId) return c.json({ message: 'Listing ID is required' }, 400);
 
         const sql = neon(c.env.DATABASE_URL);
+        // Ensure ID is parsed as integer for SQL
         const lId = parseInt(String(listingId));
         if (isNaN(lId)) return c.json({ message: 'Invalid Listing ID' }, 400);
 
@@ -362,6 +409,7 @@ app.post('/api/conversations', async (c) => {
 
         if (buyerId === sellerId) return c.json({ message: 'You cannot start a chat with yourself' }, 400);
 
+        // Check for existing conversation to avoid UNIQUE constraint violation
         const existing = await sql`
             SELECT id FROM conversations 
             WHERE listing_id = ${lId} 
@@ -379,6 +427,7 @@ app.post('/api/conversations', async (c) => {
         
         return c.json({ id: String(res[0].id) });
     } catch (e: any) {
+        console.error("Conversation creation error:", e.message);
         return c.json({ message: e.message || 'Failed to create conversation' }, 500);
     }
 });
@@ -430,6 +479,7 @@ app.get('/api/conversations/:id/messages', async (c) => {
     const conv = await sql`SELECT id FROM conversations WHERE id = ${parseInt(cid)} AND (buyer_id = ${parseInt(user.id)} OR seller_id = ${parseInt(user.id)})`;
     if (!conv.length) return c.json({ message: 'Not found' }, 404);
     
+    // Mark messages as read
     await sql`UPDATE messages SET is_read = true WHERE conversation_id = ${parseInt(cid)} AND receiver_id = ${parseInt(user.id)}`;
     
     const rows = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, created_at FROM messages WHERE conversation_id = ${parseInt(cid)} ORDER BY created_at ASC`;
@@ -447,6 +497,7 @@ app.post('/api/messages', async (c) => {
         }
 
         const sql = neon(c.env.DATABASE_URL);
+        // Explicitly convert all IDs to integers for PostgreSQL
         const convId = parseInt(String(conversationId));
         const senderId = parseInt(String(user.id));
         const recvId = parseInt(String(receiverId));
@@ -473,6 +524,7 @@ app.post('/api/messages', async (c) => {
             timestamp: result[0].created_at 
         });
     } catch (e: any) {
+        console.error("Message send error:", e.message);
         return c.json({ message: e.message || 'Failed to send message' }, 500);
     }
 });

@@ -6,6 +6,30 @@ import { CATEGORIES, SUB_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from 
 
 const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
 
+// --- Linkify Helper ---
+export const LinkifiedText = ({ text, className = "" }: { text: string, className?: string }) => {
+    // Regex for URLs and Phone numbers (optimized for Ethiopian and International formats)
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const phoneRegex = /(\+?251\s?\d{9}|0\d{9})/g;
+
+    const parts = text.split(/((?:https?:\/\/[^\s]+)|(?:\+?251\s?\d{9}|0\d{9}))/g);
+
+    return (
+        <p className={className}>
+            {parts.map((part, i) => {
+                if (part.match(urlRegex)) {
+                    return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-tumbi-600 dark:text-tumbi-400 hover:underline break-all">{part}</a>;
+                }
+                if (part.match(phoneRegex)) {
+                    const cleanPhone = part.replace(/\s/g, '');
+                    return <a key={i} href={`tel:${cleanPhone}`} className="text-tumbi-600 dark:text-tumbi-400 hover:underline">{part}</a>;
+                }
+                return part;
+            })}
+        </p>
+    );
+};
+
 // --- Avatar Component ---
 export const Avatar = ({ src, name, size = "md" }: { src?: string, name: string, size?: "sm" | "md" | "lg" | "xl" }) => {
     const sizeClasses = {
@@ -317,9 +341,9 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
         <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-dark-border relative">
             <img src={firstImage} alt={listing.title} className="w-full h-full object-cover" loading="lazy" />
             
-            {/* Verified Badge - Top Left */}
+            {/* Verified Badge - Top Right */}
             {listing.isVerified && (
-                <div className="absolute top-2 left-2 flex items-center px-1.5 py-0.5 bg-white/90 dark:bg-dark-card/90 rounded-full text-blue-500 shadow-sm z-10" title="Verified Seller">
+                <div className="absolute top-2 right-2 flex items-center px-1.5 py-0.5 bg-white/90 dark:bg-dark-card/90 rounded-full text-blue-500 shadow-sm z-10" title="Verified Seller">
                     <span className="hidden md:inline text-[9px] font-bold mr-1 uppercase">Verified</span>
                     <VerifiedIcon className="w-3.5 h-3.5" />
                 </div>
@@ -332,7 +356,7 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
             </div>
 
             {onToggleSave && !showActions && (
-                <button onClick={onToggleSave} className="absolute top-2 right-2 p-1.5 rounded-full bg-white/80 dark:bg-dark-card/80 hover:bg-white dark:hover:bg-dark-card transition-colors z-10 shadow-sm">
+                <button onClick={onToggleSave} className="absolute top-2 left-2 p-1.5 rounded-full bg-white/80 dark:bg-dark-card/80 hover:bg-white dark:hover:bg-dark-card transition-colors z-10 shadow-sm">
                     <BookmarkIcon className={`w-4 h-4 ${isSaved ? 'text-tumbi-600 fill-current' : 'text-gray-400 dark:text-dark-subtext'}`} filled={isSaved} />
                 </button>
             )}
@@ -817,7 +841,7 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
                      return (
                         <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-1 duration-200`}>
                             <div className={`max-w-[80%] p-3.5 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-tumbi-600 text-white rounded-br-none' : 'bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border text-gray-800 dark:text-dark-text rounded-bl-none'}`}>
-                                {msg.content}
+                                <LinkifiedText text={msg.content} />
                             </div>
                         </div>
                      );
@@ -881,7 +905,9 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                             <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text leading-tight">{listing.title}</h1><div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">ETB {listing.price.toLocaleString()}</div>
                         </div>
                         <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-dark-bg rounded-xl"><MapPinIcon className="w-4 h-4 text-gray-400" /><span className="text-sm font-medium text-gray-600 dark:text-dark-subtext">{listing.location}</span></div>
-                        <div className="space-y-3"><h3 className="font-bold text-sm uppercase text-gray-400 tracking-widest">Description</h3><p className="text-gray-700 dark:text-dark-subtext text-sm leading-relaxed whitespace-pre-line">{listing.description}</p></div>
+                        <div className="space-y-3"><h3 className="font-bold text-sm uppercase text-gray-400 tracking-widest">Description</h3>
+                            <LinkifiedText text={listing.description} className="text-gray-700 dark:text-dark-subtext text-sm leading-relaxed whitespace-pre-line" />
+                        </div>
                         <div className="pt-6 border-t dark:border-dark-border cursor-pointer hover:opacity-80 transition-opacity" onClick={() => listing.sellerId && onOpenVendor?.(listing.sellerId)}>
                             <div className="flex items-center space-x-4">
                                 <Avatar src={listing.sellerImage} name={listing.sellerName} size="md" />

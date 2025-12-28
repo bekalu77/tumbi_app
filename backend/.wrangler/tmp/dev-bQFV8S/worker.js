@@ -34,7 +34,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// .wrangler/tmp/bundle-XHzuNF/checked-fetch.js
+// .wrangler/tmp/bundle-ZxAyyX/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -52,7 +52,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-XHzuNF/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-ZxAyyX/checked-fetch.js"() {
     "use strict";
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
@@ -1910,11 +1910,11 @@ var require_bcrypt = __commonJS({
   }
 });
 
-// .wrangler/tmp/bundle-XHzuNF/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-ZxAyyX/middleware-loader.entry.ts
 init_checked_fetch();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-XHzuNF/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-ZxAyyX/middleware-insertion-facade.js
 init_checked_fetch();
 init_modules_watch_stub();
 
@@ -10416,6 +10416,10 @@ function getLoginVariants(input) {
   return Array.from(variants).filter((v2) => v2.length >= 9);
 }
 __name(getLoginVariants, "getLoginVariants");
+function validateUsername(name) {
+  return /^[a-zA-Z0-9.]+$/.test(name);
+}
+__name(validateUsername, "validateUsername");
 app.use("/*", cors({
   origin: "*",
   allowHeaders: ["Content-Type", "x-access-token", "Authorization"],
@@ -10449,6 +10453,9 @@ app.post("/api/register", async (c) => {
     const sql = Ys(c.env.DATABASE_URL);
     if (!name || !phone || !password) {
       return c.json({ message: "Name, phone, and password are required" }, 400);
+    }
+    if (!validateUsername(name)) {
+      return c.json({ message: "Username can only contain letters, numbers, and dots (.)" }, 400);
     }
     const normPhone = normalizePhoneForStorage(phone);
     const variants = getLoginVariants(phone);
@@ -10644,13 +10651,39 @@ app.delete("/api/saved/:id", async (c) => {
 });
 app.get("/api/users/me", async (c) => c.json(c.get("user")));
 app.put("/api/users/me", async (c) => {
-  const user = c.get("user");
-  const { name, email, location, profileImage, companyName } = await c.req.json();
-  const sql = Ys(c.env.DATABASE_URL);
-  const existing = await sql`SELECT id FROM users WHERE email = ${email} AND id != ${parseInt(user.id)}`;
-  if (existing.length) return c.json({ message: "Email in use" }, 409);
-  await sql`UPDATE users SET name = ${name}, email = ${email}, location = ${location}, profile_image = ${profileImage}, company_name = ${companyName} WHERE id = ${parseInt(user.id)}`;
-  return c.json({ message: "Updated" });
+  try {
+    const user = c.get("user");
+    const { name, email, phone, location, profileImage, companyName } = await c.req.json();
+    const sql = Ys(c.env.DATABASE_URL);
+    const userId = parseInt(String(user.id));
+    if (name && !validateUsername(name)) {
+      return c.json({ message: "Username can only contain letters, numbers, and dots (.)" }, 400);
+    }
+    const cleanEmail = email && String(email).trim() !== "" ? String(email).trim().toLowerCase() : null;
+    if (cleanEmail) {
+      const emailExisting = await sql`SELECT id FROM users WHERE email IS NOT NULL AND LOWER(email) = ${cleanEmail} AND id != ${userId}`;
+      if (emailExisting.length) return c.json({ message: "Email already in use by another account" }, 409);
+    }
+    const normPhone = normalizePhoneForStorage(phone);
+    if (normPhone) {
+      const variants = getLoginVariants(phone);
+      const phoneExisting = await sql`SELECT id FROM users WHERE (phone = ANY(${variants}) OR phone = ${normPhone}) AND id != ${userId}`;
+      if (phoneExisting.length) return c.json({ message: "Phone number already in use by another account" }, 409);
+    }
+    await sql`
+            UPDATE users SET 
+                name = ${name}, 
+                email = ${cleanEmail}, 
+                phone = ${normPhone || user.phone}, 
+                location = ${location}, 
+                profile_image = ${profileImage}, 
+                company_name = ${companyName} 
+            WHERE id = ${userId}
+        `;
+    return c.json({ message: "Updated" });
+  } catch (e) {
+    return c.json({ message: e.message || "Update failed" }, 500);
+  }
 });
 app.post("/api/upload", async (c) => {
   try {
@@ -10831,7 +10864,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-XHzuNF/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-ZxAyyX/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -10865,7 +10898,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-XHzuNF/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-ZxAyyX/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;
