@@ -400,18 +400,22 @@ app.put('/api/users/me', async (c) => {
 app.post('/api/upload', async (c) => {
     try {
         const formData = await c.req.formData();
-        const files = formData.getAll('photos');
-        if (!files || files.length === 0) return c.json({ message: 'No files' }, 400);
+        const rawFiles = formData.getAll('photos');
+        if (!rawFiles || rawFiles.length === 0) return c.json({ message: 'No files' }, 400);
         const urls: string[] = [];
         const userId = c.get('user')?.id || 'anonymous';
         const publicUrl = c.env.R2_PUBLIC_URL.endsWith('/') 
             ? c.env.R2_PUBLIC_URL.slice(0, -1) 
             : c.env.R2_PUBLIC_URL;
 
-        for (const f of files) {
-            if (!(f instanceof File)) continue;
-            const key = `${userId}-${Date.now()}-${f.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-            await c.env.R2_BUCKET.put(key, f, { httpMetadata: { contentType: f.type } });
+        for (const item of (rawFiles as any[])) {
+            if (typeof item === 'string') continue;
+            
+            const fileName = String(item.name || 'image');
+            const fileType = String(item.type || 'image/jpeg');
+            
+            const key = `${userId}-${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            await c.env.R2_BUCKET.put(key, item, { httpMetadata: { contentType: fileType } });
             urls.push(`${publicUrl}/${key}`);
         }
         return c.json({ urls });
@@ -493,7 +497,7 @@ app.get('/api/conversations', async (c) => {
     })));
 });
 
-app.post('/api/conversations/:id/read', async (c) => {
+app.post('/api/conversations/:id/read', async (c, next) => {
     const user = c.get('user');
     const cid = c.req.param('id');
     const sql = neon(c.env.DATABASE_URL);

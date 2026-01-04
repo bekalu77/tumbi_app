@@ -12,3 +12,4 @@ R2_PUBLIC_URL = "https://pub-f4faac6ec4e94df08e2c56afbf983bf1.r2.dev"
 [[r2_buckets]]
 binding = "R2_BUCKET"
 bucket_name = "tumbiapp"
+preview_bucket_name = "tumbiapp"

@@ -53,7 +53,6 @@ export default function App() {
 
   const loaderRef = useRef<HTMLDivElement>(null);
   const lastBackPressTime = useRef<number>(0);
-  const hasClearedCache = useRef<boolean>(false);
 
   // --- URL & Deep Link Logic ---
   const handleIncomingUrl = useCallback((urlStr: string) => {
@@ -211,6 +210,13 @@ export default function App() {
     setSelectedCity('All Cities');
     setSearchInput('');
     setSortBy('date-desc');
+    setAppliedFilters({
+        search: '',
+        mainCategory: 'all',
+        subCategory: 'all',
+        city: 'All Cities',
+        sortBy: 'date-desc'
+    });
     setViewState('home');
   };
 
@@ -416,7 +422,7 @@ export default function App() {
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} />}
         {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleUpdateProfile} />}
         {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} />}
-        {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === selectedListingId) || null} onBack={closeListing} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={startEditListing} onChat={openChat} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} />}
+        {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === String(selectedListingId)) || null} onBack={closeListing} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={startEditListing} onChat={openChat} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} />}
         {viewState === 'vendor-profile' && selectedVendorId && <VendorProfileView vendorId={selectedVendorId} listings={listings} onBack={() => setViewState('details')} onOpenListing={openListing} />}
         {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isListingsLoading} />}
         
