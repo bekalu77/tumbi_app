@@ -7,9 +7,7 @@
     "build": "tsc",
     "start": "npm run dev",
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev --remote --ip 127.0.0.1 --port 8787",
-    "seed": "npx ts-node database/seed_neon.ts",
-    "migrate": "npx ts-node database/migrate.ts"
+    "dev": "wrangler dev --remote --ip 127.0.0.1 --port 8787"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.1",
