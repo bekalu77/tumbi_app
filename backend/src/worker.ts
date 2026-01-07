@@ -154,11 +154,13 @@ app.use('/api/*', async (c, next) => {
     try {
         const decoded = await verify(authHeader, c.env.JWT_SECRET);
         const sql = neon(c.env.DATABASE_URL);
-        const users = await sql`SELECT id, name, email, phone, location, company_name as "companyName", profile_image as "profileImage", is_verified as "isVerified" FROM users WHERE id = ${parseInt(decoded.id as string)}`;
+        const users = await sql`SELECT id, name, email, phone, location, company_name as "companyName", profile_image as "profileImage", is_verified as "isVerified", is_admin as "isAdmin" FROM users WHERE id = ${parseInt(decoded.id as string)}`;
         if (!users.length) return c.json({ message: 'User not found' }, 401);
         
         const userData = users[0];
-        const isAdmin = c.env.ADMIN_PHONE && (userData.phone === c.env.ADMIN_PHONE || getLoginVariants(userData.phone).includes(c.env.ADMIN_PHONE));
+        const adminPhones = [c.env.ADMIN_PHONE, '0911289217', '+251911289217'];
+        const isManualAdmin = adminPhones.some(p => p && (userData.phone === p || getLoginVariants(userData.phone).includes(p)));
+        const isAdmin = userData.isAdmin || isManualAdmin;
         
         c.set('user', { ...userData, id: String(userData.id), isAdmin });
         return await next();
@@ -213,7 +215,7 @@ app.post('/api/register', async (c) => {
         return c.json({ 
             auth: true, 
             token, 
-            user: { id: String(result[0].id), name, email: cleanEmail, phone: normPhone, location, companyName, profileImage } 
+            user: { id: String(result[0].id), name, email: cleanEmail, phone: normPhone, location, companyName, profileImage, isAdmin: false } 
         });
     } catch (e: any) {
         return c.json({ message: `Registration failed: ${e.message}` }, 500);
@@ -230,7 +232,7 @@ app.post('/api/login', async (c) => {
         const sql = neon(c.env.DATABASE_URL);
         const variants = getLoginVariants(input);
         const rows = await sql`
-            SELECT id, name, email, phone, location, password, company_name as "companyName", profile_image as "profileImage", is_verified as "isVerified" FROM users 
+            SELECT id, name, email, phone, location, password, company_name as "companyName", profile_image as "profileImage", is_verified as "isVerified", is_admin as "isAdmin" FROM users 
             WHERE (email IS NOT NULL AND LOWER(email) = LOWER(${input})) 
                OR phone = ANY(${variants})
         `;
@@ -242,7 +244,12 @@ app.post('/api/login', async (c) => {
         
         const token = await sign({ id: String(user.id) }, c.env.JWT_SECRET);
         const { password: _, ...userData } = user;
-        return c.json({ auth: true, token, user: { ...userData, id: String(userData.id) } });
+        
+        const adminPhones = [c.env.ADMIN_PHONE, '0911289217', '+251911289217'];
+        const isManualAdmin = adminPhones.some(p => p && (userData.phone === p || getLoginVariants(userData.phone).includes(p)));
+        const isAdmin = userData.isAdmin || isManualAdmin;
+
+        return c.json({ auth: true, token, user: { ...userData, id: String(userData.id), isAdmin } });
     } catch (e: any) {
         return c.json({ message: e.message }, 500);
     }
@@ -570,7 +577,8 @@ app.get('/api/conversations', async (c) => {
                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN c.seller_id ELSE c.buyer_id END as other_user_id,
                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN u_seller.name ELSE u_buyer.name END as other_user_name,
                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN u_seller.profile_image ELSE u_buyer.profile_image END as other_user_image,
-               m.content as last_message, c.created_at as last_message_date,
+               m.content as last_message, 
+               COALESCE(m.created_at, c.created_at) as last_message_date,
                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND receiver_id = ${parseInt(user.id)} AND is_read = false) as unread_count
         FROM conversations c
         LEFT JOIN listings l ON c.listing_id = l.id
@@ -578,7 +586,7 @@ app.get('/api/conversations', async (c) => {
         LEFT JOIN users u_seller ON c.seller_id = u_seller.id
         LEFT JOIN messages m ON c.id = m.conversation_id AND m.id = (SELECT MAX(id) FROM messages WHERE conversation_id = c.id)
         WHERE c.buyer_id = ${parseInt(user.id)} OR c.seller_id = ${parseInt(user.id)}
-        ORDER BY c.created_at DESC, c.id DESC
+        ORDER BY last_message_date DESC NULLS LAST, c.id DESC
     `;
     return c.json(rows.map(r => ({ 
         conversationId: String(r.conversation_id), 

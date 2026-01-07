@@ -9,6 +9,7 @@ export interface User {
   companyName?: string;
   profileImage?: string;
   isVerified?: boolean;
+  isAdmin?: boolean;
   joinedDate: Date;
 }
 

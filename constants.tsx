@@ -76,7 +76,7 @@ export const SUB_CATEGORIES: Record<string, { value: string, label: string }[]> 
     { value: 'land_survey', label: 'Land Surveying' },
     { value: 'construction_services', label: 'General Construction Works' },
     { value: 'masonry', label: 'Masonry Work' },
-    { value: 'rebar_bending', label: 'Rebar Bending & Installation' },
+    { value: 'rebar_bending', label: 'Rebar Bending' },
     { value: 'installation_professionals', label: 'Installation Professionals' },
     { value: 'plumbing_service', label: 'Plumbing Installation' },
     { value: 'electrical_service', label: 'Electrical Installation' },
@@ -186,6 +186,7 @@ export const MEASUREMENT_UNITS = [
     { value: 'biago', label: 'Biago' },
     { value: 'hr', label: 'Hour' },
     { value: 'day', label: 'Day' },
+    { value: 'month', label: 'Per Month' },
     { value: 'job', label: 'Per Job' },
     { value: 'trip', label: 'Per Trip' },
 ];
