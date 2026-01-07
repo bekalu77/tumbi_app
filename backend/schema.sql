@@ -91,3 +91,25 @@ CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at ASC);
 
 -- Others
 CREATE INDEX IF NOT EXISTS idx_variations_listing_id ON listing_variations(listing_id);
+
+-- 1. Ensure conversations has it
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+-- 2. Ensure messages has it (very common to miss this one!)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+-- 3. Ensure listings has it (used for sorting the main feed)
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+UPDATE users SET is_admin = TRUE WHERE phone = '0911289217';
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+-- 1. Ensure conversations has it
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+-- 2. Ensure messages has it (very common to miss this one!)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+-- 3. Ensure listings has it (used for sorting the main feed)
+ALTER TABLE listings ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
