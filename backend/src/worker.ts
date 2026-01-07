@@ -119,9 +119,12 @@ function generateShareSlug(title: string, id: number): string {
 
 // --- MIDDLEWARE ---
 app.use('/*', cors({
-  origin: '*', 
-  allowHeaders: ['Content-Type', 'x-access-token', 'Authorization'],
+  origin: (origin) => origin, // Allow any origin that requests
+  allowHeaders: ['Content-Type', 'x-access-token', 'Authorization', 'x-requested-with'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
+  maxAge: 600,
+  credentials: true,
 }));
 
 app.onError((err, c) => {
@@ -163,6 +166,9 @@ app.use('/api/*', async (c, next) => {
         return c.json({ message: 'Invalid session' }, 401);
     }
 });
+
+// --- ROOT & HEALTH ---
+app.get('/', (c) => c.json({ status: 'ok', service: 'tumbi-backend' }));
 
 // --- AUTH ---
 app.post('/api/register', async (c) => {
