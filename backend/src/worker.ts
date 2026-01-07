@@ -9,6 +9,8 @@ type Bindings = {
     JWT_SECRET: string;
     R2_BUCKET: R2Bucket;
     R2_PUBLIC_URL: string;
+    ADMIN_PHONE: string;
+    TELEGRAM_BOT_TOKEN: string;
 }
 
 type Variables = {
@@ -17,7 +19,60 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+const TELEGRAM_CHATS = [
+    { id: '-1002512924994', name: '@tumbi_app' },
+    { id: '-1002192283161', name: '@tumbi_conmart' }
+];
+
 // --- HELPERS ---
+async function postToTelegram(listing: any, env: Bindings) {
+    if (!env.TELEGRAM_BOT_TOKEN) return;
+
+    const firstImage = listing.imageUrls && listing.imageUrls.length > 0 ? listing.imageUrls[0] : null;
+    const shareUrl = `https://tumbi.app/?listing=${listing.share_slug || listing.id}`;
+    
+    const caption = `
+🚀 *New Listing on Tumbi*
+
+*${listing.title}*
+💰 *Price:* ${listing.price} ETB ${listing.unit ? `/ ${listing.unit}` : ''}
+📍 *Location:* ${listing.location}
+📞 *Contact:* ${listing.contact_phone || 'Contact via App'}
+
+📝 *Description:*
+${listing.description ? (listing.description.length > 150 ? listing.description.substring(0, 150) + '...' : listing.description) : 'No description provided.'}
+
+🔗 *View Details:* [Click Here](${shareUrl})
+
+#Tumbi #${listing.main_category?.replace(/[^a-zA-Z0-9]/g, '')} #Ethiopia
+    `.trim();
+
+    for (const chat of TELEGRAM_CHATS) {
+        try {
+            const endpoint = firstImage ? 'sendPhoto' : 'sendMessage';
+            const body: any = {
+                chat_id: chat.id,
+                parse_mode: 'Markdown',
+            };
+
+            if (firstImage) {
+                body.photo = firstImage;
+                body.caption = caption;
+            } else {
+                body.text = caption;
+            }
+
+            await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+        } catch (e) {
+            console.error(`Telegram Post Error (${chat.name}):`, e);
+        }
+    }
+}
+
 function normalizePhoneForStorage(phone: any): string {
     const phoneStr = String(phone || '').trim();
     if (!phoneStr) return '';
@@ -98,7 +153,11 @@ app.use('/api/*', async (c, next) => {
         const sql = neon(c.env.DATABASE_URL);
         const users = await sql`SELECT id, name, email, phone, location, company_name as "companyName", profile_image as "profileImage", is_verified as "isVerified" FROM users WHERE id = ${parseInt(decoded.id as string)}`;
         if (!users.length) return c.json({ message: 'User not found' }, 401);
-        c.set('user', { ...users[0], id: String(users[0].id) });
+        
+        const userData = users[0];
+        const isAdmin = c.env.ADMIN_PHONE && (userData.phone === c.env.ADMIN_PHONE || getLoginVariants(userData.phone).includes(c.env.ADMIN_PHONE));
+        
+        c.set('user', { ...userData, id: String(userData.id), isAdmin });
         return await next();
     } catch (err) {
         return c.json({ message: 'Invalid session' }, 401);
@@ -236,7 +295,6 @@ app.get('/api/listings/:id', async (c) => {
     const increments = [3, 5, 7, 9];
     const randomIncrement = increments[Math.floor(Math.random() * increments.length)];
     try { 
-        // Atomic update: +1 for normal users, random boost for verified ones
         await sql`
             UPDATE listings 
             SET views = views + (
@@ -295,6 +353,10 @@ app.post('/api/listings', async (c) => {
     
     const final = await sql`UPDATE listings SET share_slug = ${shareSlug} WHERE id = ${newId} RETURNING *`;
     
+    // Post to Telegram (background task)
+    const fullListing = { ...final[0], imageUrls, price, unit, title, location, description, contact_phone: contactPhone || user.phone };
+    c.executionCtx.waitUntil(postToTelegram(fullListing, c.env));
+    
     return c.json({ ...final[0], id: String(final[0].id) });
 });
 
@@ -306,16 +368,31 @@ app.put('/api/listings/:id', async (c) => {
     
     const shareSlug = generateShareSlug(title, parseInt(id));
 
-    const result = await sql`
-        UPDATE listings SET 
-            title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
-            main_category = ${mainCategory}, sub_category = ${subCategory}, 
-            description = ${description}, image_url = ${imageUrls.join(',')}, 
-            status = ${status || 'active'}, contact_phone = ${contactPhone || null},
-            share_slug = ${shareSlug}
-        WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} 
-        RETURNING *
-    `;
+    let result;
+    if (user.isAdmin) {
+        result = await sql`
+            UPDATE listings SET 
+                title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
+                main_category = ${mainCategory}, sub_category = ${subCategory}, 
+                description = ${description}, image_url = ${imageUrls.join(',')}, 
+                status = ${status || 'active'}, contact_phone = ${contactPhone || null},
+                share_slug = ${shareSlug}
+            WHERE id = ${parseInt(id)}
+            RETURNING *
+        `;
+    } else {
+        result = await sql`
+            UPDATE listings SET 
+                title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
+                main_category = ${mainCategory}, sub_category = ${subCategory}, 
+                description = ${description}, image_url = ${imageUrls.join(',')}, 
+                status = ${status || 'active'}, contact_phone = ${contactPhone || null},
+                share_slug = ${shareSlug}
+            WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} 
+            RETURNING *
+        `;
+    }
+
     if (!result.length) return c.json({ message: 'Not authorized' }, 403);
     return c.json({ ...result[0], id: String(result[0].id) });
 });
@@ -324,7 +401,14 @@ app.delete('/api/listings/:id', async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
     const sql = neon(c.env.DATABASE_URL);
-    const result = await sql`DELETE FROM listings WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} RETURNING id`;
+
+    let result;
+    if (user.isAdmin) {
+        result = await sql`DELETE FROM listings WHERE id = ${parseInt(id)} RETURNING id`;
+    } else {
+        result = await sql`DELETE FROM listings WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} RETURNING id`;
+    }
+
     if (!result.length) return c.json({ message: 'Not authorized' }, 403);
     return c.json({ message: 'Deleted' });
 });
