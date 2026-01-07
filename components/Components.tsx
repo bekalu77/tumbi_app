@@ -873,19 +873,54 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
 
         try {
              const res = await fetch(`${API_URL}/api/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token }, body: JSON.stringify({ conversationId: parseInt(session.conversationId), receiverId: parseInt(session.otherUserId), content: content }) });
-             if (!res.ok) throw new Error('Failed');
+             const data = await res.json();
+             if (!res.ok) throw new Error(data.message || 'Failed to send message');
              await loadMessages();
-        } catch (error) { 
+        } catch (error: any) { 
             setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id)); 
             setNewMessage(content); 
-            alert("Failed to send message.");
+            alert(error.message || "Failed to send message.");
         } finally {
             setIsSending(false);
         }
     };
 
+    if (!embedded) {
+        return (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 md:p-0">
+                <div className="bg-white dark:bg-dark-bg w-full h-full md:w-auto md:h-auto md:max-w-2xl md:max-h-[80vh] md:rounded-2xl md:shadow-2xl flex flex-col">
+                    <div className="p-4 border-b dark:border-dark-border flex items-center bg-white dark:bg-dark-card shadow-sm">
+                         <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeftIcon className="w-5 h-5 text-gray-900 dark:text-dark-text" /></button>
+                        <div className="flex items-center space-x-3">
+                            <Avatar src={session.otherUserImage} name={session.otherUserName} size="sm" />
+                            <div className="overflow-hidden"><h2 className="font-bold text-gray-900 dark:text-dark-text leading-tight truncate">{session.otherUserName}</h2><p className="text-xs text-gray-500 truncate w-40">{session.listingTitle}</p></div>
+                        </div>
+                    </div>
+                    <div ref={scrollRef} className="flex-1 bg-gray-50 dark:bg-dark-bg p-4 space-y-4 overflow-y-auto">
+                         {messages.map(msg => {
+                             const isMe = String(msg.sender_id) === String(user.id);
+                             return (
+                                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-1 duration-200`}>
+                                    <div className={`max-w-[80%] p-3.5 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-tumbi-600 text-white rounded-br-none' : 'bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border text-gray-800 dark:text-dark-text rounded-bl-none'}`}>
+                                        <LinkifiedText text={msg.content} />
+                                    </div>
+                                </div>
+                             );
+                         })}
+                    </div>
+                    <div className="p-4 border-t dark:border-dark-border bg-white dark:bg-dark-card flex items-center space-x-2">
+                        <input className="flex-grow border border-gray-300 dark:border-dark-border rounded-full px-5 py-2.5 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none transition-all disabled:opacity-50" placeholder={isSending ? "Sending..." : "Type a message..."} value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} disabled={isSending} />
+                        <button onClick={handleSend} disabled={!newMessage.trim() || isSending} className="p-3 bg-tumbi-600 rounded-full text-white disabled:opacity-50 hover:bg-tumbi-700 active:scale-95 transition-all flex-shrink-0">
+                            {isSending ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <ArrowLeftIcon className="w-5 h-5 rotate-180" />}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className={`flex flex-col h-full ${!embedded ? 'fixed inset-0 z-50 bg-white dark:bg-dark-bg' : ''}`}>
+        <div className="flex flex-col h-full">
             <div className="p-4 border-b dark:border-dark-border flex items-center bg-white dark:bg-dark-card shadow-sm">
                  <button onClick={onBack} className={`p-2 mr-2 hover:bg-gray-100 rounded-full transition-colors ${embedded ? 'md:hidden' : ''}`}><ChevronLeftIcon className="w-5 h-5 text-gray-900 dark:text-dark-text" /></button>
                 <div className="flex items-center space-x-3">

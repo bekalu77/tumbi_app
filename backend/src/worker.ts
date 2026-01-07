@@ -563,23 +563,23 @@ app.get('/api/conversations', async (c) => {
                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN c.seller_id ELSE c.buyer_id END as other_user_id,
                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN u_seller.name ELSE u_buyer.name END as other_user_name,
                CASE WHEN c.buyer_id = ${parseInt(user.id)} THEN u_seller.profile_image ELSE u_buyer.profile_image END as other_user_image,
-               m.content as last_message, m.created_at as last_message_date,
+               m.content as last_message, c.created_at as last_message_date,
                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND receiver_id = ${parseInt(user.id)} AND is_read = false) as unread_count
         FROM conversations c
-        JOIN listings l ON c.listing_id = l.id
+        LEFT JOIN listings l ON c.listing_id = l.id
         LEFT JOIN users u_buyer ON c.buyer_id = u_buyer.id
         LEFT JOIN users u_seller ON c.seller_id = u_seller.id
         LEFT JOIN messages m ON c.id = m.conversation_id AND m.id = (SELECT MAX(id) FROM messages WHERE conversation_id = c.id)
         WHERE c.buyer_id = ${parseInt(user.id)} OR c.seller_id = ${parseInt(user.id)}
-        ORDER BY COALESCE(m.created_at, TO_TIMESTAMP(0)) DESC, c.id DESC
+        ORDER BY c.created_at DESC, c.id DESC
     `;
     return c.json(rows.map(r => ({ 
         conversationId: String(r.conversation_id), 
         listingId: String(r.listing_id), 
-        listingTitle: r.listing_title, 
+        listingTitle: r.listing_title || 'Unknown Listing', 
         listingImage: r.image_url ? r.image_url.split(',')[0] : '', 
         otherUserId: String(r.other_user_id), 
-        otherUserName: r.other_user_name, 
+        otherUserName: r.other_user_name || 'Deleted User', 
         otherUserImage: r.other_user_image,
         lastMessage: r.last_message || '', 
         lastMessageDate: r.last_message_date || new Date(), 
@@ -626,6 +626,13 @@ app.post('/api/messages', async (c) => {
         if (isNaN(convId) || isNaN(senderId) || isNaN(recvId)) {
             return c.json({ message: 'Invalid ID format' }, 400);
         }
+
+        // Check if conversation exists and user is part of it
+        const convCheck = await sql`SELECT buyer_id, seller_id FROM conversations WHERE id = ${convId}`;
+        if (!convCheck.length) return c.json({ message: 'Conversation not found' }, 404);
+        if (convCheck[0].buyer_id !== senderId && convCheck[0].seller_id !== senderId) return c.json({ message: 'Unauthorized' }, 403);
+        // Check if receiver is the other participant
+        if ((senderId === convCheck[0].buyer_id && recvId !== convCheck[0].seller_id) || (senderId === convCheck[0].seller_id && recvId !== convCheck[0].buyer_id)) return c.json({ message: 'Invalid receiver' }, 400);
 
         const result = await sql`
             INSERT INTO messages (conversation_id, sender_id, receiver_id, content) 
