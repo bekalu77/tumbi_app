@@ -54,26 +54,17 @@ export default function App() {
   const loaderRef = useRef<HTMLDivElement>(null);
   const lastBackPressTime = useRef<number>(0);
 
-  // --- URL & Deep Link Logic ---
   const handleIncomingUrl = useCallback((urlStr: string) => {
     try {
         const url = new URL(urlStr);
         const listingParam = url.searchParams.get('listing');
-        if (listingParam) {
-            openListing(listingParam, false);
-        }
-    } catch (e) {
-        console.error("Failed to parse incoming URL", e);
-    }
+        if (listingParam) { openListing(listingParam, false); }
+    } catch (e) { console.error("Failed to parse incoming URL", e); }
   }, []);
 
   const openListing = async (idOrSlug: string, pushState = true) => { 
-    // Show details view immediately to provide feedback
     setViewState('details');
-    
     let targetId = idOrSlug;
-
-    // Check if it's a slug (contains non-digits)
     if (isNaN(Number(idOrSlug))) {
         try {
             const res = await fetch(`${API_URL}/api/share/${idOrSlug}`);
@@ -83,15 +74,11 @@ export default function App() {
             }
         } catch (e) { console.error("Slug resolution failed", e); }
     }
-
     setSelectedListingId(targetId.toString()); 
-    
     if (pushState) {
         const newUrl = `${window.location.origin}${window.location.pathname}?listing=${idOrSlug}`;
         window.history.pushState({ listingId: idOrSlug }, '', newUrl);
     }
-
-    // Always fetch latest data to increment views and ensure data exists locally
     try {
         const response = await fetch(`${API_URL}/api/listings/${targetId}`, { cache: 'no-store' });
         if (response.ok) {
@@ -102,9 +89,7 @@ export default function App() {
                 return [data, ...prev];
             });
         }
-    } catch (err) {
-        console.error("Failed to fetch shared listing:", err);
-    }
+    } catch (err) { console.error("Failed to fetch shared listing:", err); }
   };
 
   const closeListing = () => {
@@ -116,24 +101,13 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-        if (event.state?.listingId) {
-            openListing(event.state.listingId, false);
-        } else {
-            setViewState('home');
-            setSelectedListingId(null);
-        }
+        if (event.state?.listingId) { openListing(event.state.listingId, false); }
+        else { setViewState('home'); setSelectedListingId(null); }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  useEffect(() => {
-    CapApp.addListener('appUrlOpen', (data: any) => {
-        handleIncomingUrl(data.url);
-    });
-  }, [handleIncomingUrl]);
-
-  // --- Core Fetching Logic ---
   const fetchListings = useCallback(async (currentOffset: number, filters = appliedFilters, clearExisting = false) => {
     try {
       if (currentOffset === 0) setIsListingsLoading(true);
@@ -153,21 +127,20 @@ export default function App() {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       
-      if (clearExisting) {
-        setListings(data);
-      } else {
+      if (clearExisting) { setListings(data); }
+      else {
         setListings(prev => {
             const existingIds = new Set(prev.map(l => l.id));
             const newItems = data.filter((l: Listing) => !existingIds.has(l.id));
             return [...prev, ...newItems];
         });
       }
-      
       setHasMore(data.length === PAGE_SIZE);
       setOffset(currentOffset + data.length);
       setIsOffline(false);
     } catch (e) {
-      if (currentOffset === 0) setIsOffline(true);
+      console.error("Listing Fetch Failed:", e);
+      // We no longer set isOffline here to avoid the maintenance screen loop
     } finally {
       setIsListingsLoading(false);
       setIsLoadingMore(false);
@@ -175,11 +148,7 @@ export default function App() {
     }
   }, [appliedFilters]);
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setOffset(0);
-    fetchListings(0, appliedFilters, true);
-  };
+  const handleRefresh = () => { setOffset(0); fetchListings(0, appliedFilters, true); };
 
   const loadMore = useCallback(() => {
     if (!isLoadingMore && hasMore && viewState === 'home') fetchListings(offset);
@@ -197,75 +166,41 @@ export default function App() {
     setAppliedFilters({ search: searchInput, mainCategory: selectedMainCategory, subCategory: selectedSubCategory, city: selectedCity, sortBy: sortBy });
   }, [selectedMainCategory, selectedSubCategory, selectedCity, sortBy]);
 
-  useEffect(() => {
-    setOffset(0);
-    fetchListings(0, appliedFilters, true);
-  }, [appliedFilters]);
+  useEffect(() => { setOffset(0); fetchListings(0, appliedFilters, true); }, [appliedFilters]);
 
   const handleApplyFilters = () => setAppliedFilters(prev => ({ ...prev, search: searchInput }));
 
   const resetAllFilters = () => {
-    setSelectedMainCategory('all');
-    setSelectedSubCategory('all');
-    setSelectedCity('All Cities');
-    setSearchInput('');
-    setSortBy('date-desc');
-    setAppliedFilters({
-        search: '',
-        mainCategory: 'all',
-        subCategory: 'all',
-        city: 'All Cities',
-        sortBy: 'date-desc'
-    });
+    setSelectedMainCategory('all'); setSelectedSubCategory('all'); setSelectedCity('All Cities'); setSearchInput(''); setSortBy('date-desc');
+    setAppliedFilters({ search: '', mainCategory: 'all', subCategory: 'all', city: 'All Cities', sortBy: 'date-desc' });
     setViewState('home');
   };
-
-  const fetchSavedListings = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-        const response = await fetch(`${API_URL}/api/saved`, { headers: { 'x-access-token': token }, cache: 'no-store' });
-        if (response.ok) {
-            const ids = await response.json();
-            setSavedListingIds(new Set(ids));
-        }
-    } catch (e) { console.error(e); }
-  }
-
-  const fetchUnreadCount = async () => {
-    const token = localStorage.getItem('token');
-    if (!token || !user) return;
-    try {
-        const response = await fetch(`${API_URL}/api/conversations`, { headers: { 'x-access-token': token }, cache: 'no-store' });
-        if (response.ok) {
-            const conversations = await response.json();
-            setTotalUnreadMessages(conversations.reduce((sum: number, conv: ChatSession) => sum + (conv.unreadCount || 0), 0));
-        }
-    } catch (e) { console.error(e); }
-  }
 
   useEffect(() => {
     const initApp = async () => {
       const token = localStorage.getItem('token');
       const userData = localStorage.getItem('user');
-      if (token && userData) {
-        try { setUser(JSON.parse(userData)); } catch (e) { localStorage.removeItem('user'); }
-      }
+      if (token && userData) { try { setUser(JSON.parse(userData)); } catch (e) { localStorage.removeItem('user'); } }
       setIsUserLoading(false);
-
       if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.classList.add('dark');
-        setIsDarkMode(true);
+        document.documentElement.classList.add('dark'); setIsDarkMode(true);
       }
-
-      // Initial URL check for shared links
       handleIncomingUrl(window.location.href);
     };
     initApp();
   }, [handleIncomingUrl]);
 
   useEffect(() => {
-    if (user) { fetchSavedListings(); fetchUnreadCount(); }
+    if (user) { 
+        // Fetch saved and unread count in background
+        const token = localStorage.getItem('token');
+        if (token) {
+            fetch(`${API_URL}/api/saved`, { headers: { 'x-access-token': token } })
+                .then(r => r.json()).then(ids => setSavedListingIds(new Set(ids))).catch(() => {});
+            fetch(`${API_URL}/api/conversations`, { headers: { 'x-access-token': token } })
+                .then(r => r.json()).then(convs => setTotalUnreadMessages(convs.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0))).catch(() => {});
+        }
+    }
   }, [user]);
 
   useEffect(() => {
@@ -297,195 +232,102 @@ export default function App() {
   const handleAuthSuccess = (data: { auth: boolean, token: string, user: User }) => {
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
-    setUser(data.user);
-    setShowAuth(false);
-    fetchSavedListings();
-    fetchUnreadCount();
+    setUser(data.user); setShowAuth(false);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-    setSavedListingIds(new Set());
-    setViewState('home');
+    localStorage.removeItem('token'); localStorage.removeItem('user');
+    setUser(null); setSavedListingIds(new Set()); setViewState('home');
   };
 
   const uploadPhotos = async (photos: File[]): Promise<string[]> => {
     const token = localStorage.getItem('token');
-    if (!token) throw new Error('Not authenticated');
     const photoFormData = new FormData();
     photos.forEach((photo) => photoFormData.append('photos', photo));
-    const uploadRes = await fetch(`${API_URL}/api/upload`, { method: 'POST', headers: { 'x-access-token': token }, body: photoFormData });
+    const uploadRes = await fetch(`${API_URL}/api/upload`, { method: 'POST', headers: { 'x-access-token': token || '' }, body: photoFormData });
     const uploadData = await uploadRes.json();
-    if (!uploadRes.ok) throw new Error(uploadData.message || 'Failed to upload images');
     return uploadData.urls;
   };
 
   const handleSaveListing = async (data: any, imageUrls: string[]) => {
-    setIsListingsLoading(true);
     const token = localStorage.getItem('token');
-    if (!token) { handleLogout(); setShowAuth(true); setIsListingsLoading(false); return; }
     const isEditing = !!editingListing;
     try {
-        const listingData = { ...data, imageUrls };
-        const endpoint = isEditing ? `${API_URL}/api/listings/${editingListing.id}` : `${API_URL}/api/listings`;
-        const method = isEditing ? 'PUT' : 'POST';
-        const listingRes = await fetch(endpoint, { method, headers: { 'Content-Type': 'application/json', 'x-access-token': token }, body: JSON.stringify(listingData) });
-        const responseData = await listingRes.json();
-        if (!listingRes.ok) {
-            if (listingRes.status === 401) { handleLogout(); setShowAuth(true); }
-            throw new Error(responseData.message || `Failed to ${isEditing ? 'update' : 'create'} listing`);
-        }
-        alert(`Listing ${isEditing ? 'updated' : 'created'} successfully!`);
-        handleRefresh();
-        setViewState('home');
-        setEditingListing(undefined);
-    } catch (error: any) { alert(`Error: ${error.message}`); } finally { setIsListingsLoading(false); }
-};
-
-  const handleUpdateProfile = async (formData: { name: string, email: string, location: string }) => {
-      const token = localStorage.getItem('token');
-      if (!user || !token) return;
-      try {
-          const response = await fetch(`${API_URL}/api/users/me`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', 'x-access-token': token },
-              body: JSON.stringify(formData)
-          });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.message);
-          const updatedUser = { ...user, ...formData };
-          setUser(updatedUser);
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          setShowEditProfile(false);
-          alert("Profile updated successfully!");
-      } catch (error: any) { alert(`Failed to update profile: ${error.message}`); }
-  };
-
-  const startEditListing = (listing: Listing) => { setEditingListing(listing); setViewState('edit'); };
-  
-  const openChat = async (listing: Listing) => {
-    const token = localStorage.getItem('token');
-    if (!user || !token) { setShowAuth(true); return; }
-    if (String(user.id) === String(listing.sellerId)) { alert("You cannot start a chat about your own listing."); return; }
-    try {
-      const res = await fetch(`${API_URL}/api/conversations`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token }, body: JSON.stringify({ listingId: listing.id }) });
-      const conversationData = await res.json();
-      if (!res.ok) throw new Error(conversationData.message);
-      const firstImage = Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0 ? listing.imageUrls[0] : '';
-      setActiveChat({ conversationId: String(conversationData.id), listingId: String(listing.id), listingTitle: listing.title, listingImage: firstImage, otherUserId: String(listing.sellerId), otherUserName: listing.sellerName, otherUserImage: listing.sellerImage, lastMessage: '', lastMessageDate: new Date() });
-      setViewState('chat-conversation');
-    } catch (error: any) { alert(`Error starting chat: ${error.message}`); }
+        const listingRes = await fetch(`${API_URL}/api/listings${isEditing ? `/${editingListing.id}` : ''}`, { method: isEditing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token || '' }, body: JSON.stringify({ ...data, imageUrls }) });
+        if (listingRes.ok) { handleRefresh(); setViewState('home'); setEditingListing(undefined); }
+    } catch (error: any) { alert(`Error: ${error.message}`); }
   };
 
   const toggleSave = async (id: string) => {
     const token = localStorage.getItem('token');
     if (!user || !token) { setShowAuth(true); return; }
     const isCurrentlySaved = savedListingIds.has(id);
-    const method = isCurrentlySaved ? 'DELETE' : 'POST';
     setSavedListingIds(prev => {
         const next = new Set(prev);
         if (isCurrentlySaved) next.delete(id); else next.add(id);
         return next;
     });
-    try {
-        const response = await fetch(`${API_URL}/api/saved/${id}`, { method: method, headers: { 'x-access-token': token } });
-        if (!response.ok && response.status === 401) { handleLogout(); setShowAuth(true); }
-    } catch (e) {
-        setSavedListingIds(prev => {
-            const next = new Set(prev);
-            if (isCurrentlySaved) next.add(id); else next.delete(id);
-            return next;
-        });
-    }
+    await fetch(`${API_URL}/api/saved/${id}`, { method: isCurrentlySaved ? 'DELETE' : 'POST', headers: { 'x-access-token': token } });
   };
 
   const checkAuthAndGo = (targetView: ViewState) => { if (user) setViewState(targetView); else setShowAuth(true); };
 
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [pullDistance, setPullDistance] = useState(0);
-  const handleTouchStart = (e: React.TouchEvent) => { if (window.scrollY === 0) setTouchStart(e.targetTouches[0].clientY); };
-  const handleTouchMove = (e: React.TouchEvent) => { if (touchStart !== null && window.scrollY === 0) { const distance = e.targetTouches[0].clientY - touchStart; if (distance > 0) setPullDistance(Math.min(distance, 80)); } };
-  const handleTouchEnd = () => { if (pullDistance > 60) handleRefresh(); setTouchStart(null); setPullDistance(0); };
-
-  if (isOffline) return <MaintenanceView onRetry={handleRefresh} />;
-
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`} onTouchStart={viewState === 'home' ? handleTouchStart : undefined} onTouchMove={viewState === 'home' ? handleTouchMove : undefined} onTouchEnd={viewState === 'home' ? handleTouchEnd : undefined} >
-        {pullDistance > 0 && (
-          <div className="fixed top-0 left-0 w-full flex justify-center z-[100] transition-transform pointer-events-none" style={{ transform: `translateY(${pullDistance}px)` }}>
-            <div className="bg-white dark:bg-dark-card p-2 rounded-full shadow-lg border border-gray-100 dark:border-dark-border"><RefreshCwIcon className={`w-6 h-6 text-tumbi-600 ${pullDistance > 60 ? 'animate-spin' : ''}`} /></div>
-          </div>
-        )}
-
+    <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`}>
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} />}
-        {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleUpdateProfile} />}
+        {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={() => {}} />}
         {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} />}
-        {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === String(selectedListingId)) || null} onBack={closeListing} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={startEditListing} onChat={openChat} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} />}
+        {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === String(selectedListingId)) || null} onBack={closeListing} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={(l) => { setEditingListing(l); setViewState('edit'); }} onChat={(l) => {
+             const token = localStorage.getItem('token');
+             if(!user || !token) { setShowAuth(true); return; }
+             fetch(`${API_URL}/api/conversations`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token }, body: JSON.stringify({ listingId: l.id }) })
+                .then(r => r.json()).then(d => {
+                    setActiveChat({ conversationId: String(d.id), listingId: String(l.id), listingTitle: l.title, listingImage: l.imageUrls[0], otherUserId: String(l.sellerId), otherUserName: l.sellerName, otherUserImage: l.sellerImage, lastMessage: '', lastMessageDate: new Date() });
+                    setViewState('chat-conversation');
+                });
+        }} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} />}
+        
         {viewState === 'vendor-profile' && selectedVendorId && <VendorProfileView vendorId={selectedVendorId} listings={listings} onBack={() => setViewState('details')} onOpenListing={openListing} />}
-        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isListingsLoading} />}
+        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={false} />}
         
         <header className="sticky top-0 z-30 bg-tumbi-500 dark:bg-dark-card shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-3">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={resetAllFilters}><TumbiLogo className="w-8 h-8" color="white" /><h1 className="text-xl font-bold tracking-tight uppercase">TUMBI</h1></div>
-                    <div className="flex items-center space-x-2">
-                        <button onClick={handleRefresh} className={`p-2 rounded-full text-white/80 hover:text-white transition-colors ${isRefreshing ? 'animate-spin' : ''}`}><RefreshCwIcon className="w-5 h-5" /></button>
-                        <ThemeToggle isDark={isDarkMode} toggle={toggleDarkMode} />
-                    </div>
+                    <ThemeToggle isDark={isDarkMode} toggle={toggleDarkMode} />
                 </div>
-                <div className="mb-3">
-                    <div className="relative w-full">
-                        <input type="text" placeholder="I am looking for..." className="w-full h-10 pl-4 pr-10 rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text placeholder-gray-500 dark:placeholder-dark-subtext outline-none focus:ring-2 focus:ring-tumbi-700 shadow-sm text-sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()} />
-                        <button onClick={handleApplyFilters} className="absolute right-0 top-0 h-10 px-3 text-gray-400 dark:text-dark-subtext"><SearchIcon className="w-5 h-5" /></button>
-                    </div>
+                <div className="relative w-full mb-3">
+                    <input type="text" placeholder="I am looking for..." className="w-full h-10 pl-4 pr-10 rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text outline-none focus:ring-2 focus:ring-tumbi-700 shadow-sm text-sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()} />
+                    <button onClick={handleApplyFilters} className="absolute right-0 top-0 h-10 px-3 text-gray-400 dark:text-dark-subtext"><SearchIcon className="w-5 h-5" /></button>
                 </div>
-                {viewState === 'home' && (
-                    <div className="grid grid-cols-3 gap-2">
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}>
-                            <option>All Cities</option>{ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
-                        </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>
-                            {CATEGORIES.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}
-                        </select>
-                        <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-500 appearance-none cursor-pointer" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}>
-                            <option value="all">Sub-Categories</option>{selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}
-                        </select>
-                    </div>
-                )}
+                <div className="grid grid-cols-3 gap-2">
+                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}><option>All Cities</option>{ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}</select>
+                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>{CATEGORIES.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}</select>
+                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-500 appearance-none cursor-pointer" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}><option value="all">Sub-Categories</option>{selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}</select>
+                </div>
             </div>
         </header>
 
-        {viewState === 'home' && (
-            <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col md:flex-row">
-                <main className="flex-1">
-                    <div className="mb-6 flex justify-end">
-                        <div className="flex items-center bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg px-3 h-10 shadow-sm">
-                            <span className="mr-2 text-xs font-bold text-gray-500 dark:text-dark-subtext">Sort by:</span>
-                            <select className="bg-transparent border-none outline-none text-gray-900 dark:text-dark-text text-xs font-bold p-0 focus:ring-0 cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                                <option value="date-desc">Newest</option><option value="date-asc">Oldest</option><option value="price-asc">Price: Low-High</option><option value="price-desc">Price: High-Low</option>
-                            </select>
-                        </div>
-                    </div>
-                    {(isListingsLoading && listings.length === 0) ? (
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{[1,2,3,4,5,6,7,8].map(i => <div key={i} className="bg-gray-200 dark:bg-dark-card rounded-2xl aspect-square animate-pulse"></div>)}</div>
-                    ) : listings.length > 0 ? (
-                        <><div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} />))}</div>
-                        <div ref={loaderRef} className="h-20 flex items-center justify-center mt-4">
-                            {isLoadingMore && <div className="flex flex-col items-center"><RefreshCwIcon className="w-6 h-6 text-tumbi-600 animate-spin" /><p className="text-xs text-gray-500 mt-2 font-medium">Loading more listings...</p></div>}
-                            {!hasMore && listings.length > 0 && <p className="text-sm text-gray-400 font-medium italic">No more listings to show</p>}
-                        </div></>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-24 text-center"><SearchIcon className="w-10 h-10 text-gray-400 mb-6" /><p className="text-xl text-gray-600 dark:text-dark-text font-bold">No items found</p><button onClick={resetAllFilters} className="mt-6 text-tumbi-600 dark:text-tumbi-400 font-bold hover:underline">Clear all filters</button></div>
-                    )}
-                </main>
-            </div>
-        )}
-
-        {viewState === 'saved' && user && <SavedView listings={listings} savedIds={savedListingIds} onOpen={openListing} onToggleSave={toggleSave} />}
-        {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} onUnreadCountChange={setTotalUnreadMessages} />}
-        {viewState === 'profile' && user ? <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={startEditListing} onDeleteListing={(id) => { if(confirm('Delete this listing?')) fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => handleRefresh())}} onEditProfile={() => setShowEditProfile(true)} /> : viewState === 'profile' && !user ? <AuthModal onAuthSuccess={handleAuthSuccess} onClose={() => setViewState('home')} /> : null}
+        <main className="max-w-7xl mx-auto px-4 py-8">
+            {viewState === 'home' && (
+                <>
+                <div className="mb-6 flex justify-end">
+                    <select className="bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg px-3 h-10 shadow-sm text-xs font-bold dark:text-dark-text outline-none cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                        <option value="date-desc">Newest</option><option value="date-asc">Oldest</option><option value="price-asc">Price: Low-High</option><option value="price-desc">Price: High-Low</option>
+                    </select>
+                </div>
+                {listings.length > 0 ? (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} />))}</div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-24 text-center"><SearchIcon className="w-10 h-10 text-gray-400 mb-6" /><p className="text-xl text-gray-600 dark:text-dark-text font-bold">No items found</p></div>
+                )}
+                <div ref={loaderRef} className="h-20 flex items-center justify-center mt-4">{isLoadingMore && <RefreshCwIcon className="w-6 h-6 text-tumbi-600 animate-spin" />}</div>
+                </>
+            )}
+            {viewState === 'saved' && user && <SavedView listings={listings} savedIds={savedListingIds} onOpen={openListing} onToggleSave={toggleSave} />}
+            {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} onUnreadCountChange={setTotalUnreadMessages} />}
+            {viewState === 'profile' && user && <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={(l) => { setEditingListing(l); setViewState('edit'); }} onDeleteListing={(id) => { fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => handleRefresh())}} onEditProfile={() => setShowEditProfile(true)} />}
+        </main>
 
         <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-card border-t border-gray-200 dark:border-dark-border z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
             <div className="flex justify-around items-center h-16 max-w-4xl mx-auto px-2">
@@ -493,7 +335,7 @@ export default function App() {
                 <button onClick={() => checkAuthAndGo('saved')} className={`flex flex-col items-center justify-center w-full h-full ${viewState === 'saved' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}><SaveIcon className="w-6 h-6" filled={viewState === 'saved'} /></button>
                 <div className="relative -top-6"><button onClick={() => { setEditingListing(undefined); checkAuthAndGo('sell'); }} className="w-14 h-14 bg-tumbi-500 hover:bg-tumbi-600 rounded-full flex items-center justify-center text-white shadow-lg border-4 border-white dark:border-dark-bg transition-transform hover:scale-105 active:scale-95"><PlusIcon className="w-7 h-7" /></button></div>
                 <button onClick={() => checkAuthAndGo('messages')} className={`flex flex-col items-center justify-center w-full h-full relative ${viewState === 'messages' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}><MessageCircleIcon className="w-6 h-6" />{totalUnreadMessages > 0 && <div className="absolute top-3 right-1/2 translate-x-4 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-dark-card"></div>}</button>
-                <button onClick={() => checkAuthAndGo('profile')} className={`flex flex-col items-center justify-center w-full h-full ${viewState === 'profile' || viewState === 'register' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}><UserIcon className="w-6 h-6" /></button>
+                <button onClick={() => checkAuthAndGo('profile')} className={`flex flex-col items-center justify-center w-full h-full ${viewState === 'profile' ? 'text-tumbi-600 dark:text-tumbi-400' : 'text-gray-400 dark:text-dark-subtext'}`}><UserIcon className="w-6 h-6" /></button>
             </div>
         </nav>
     </div>
