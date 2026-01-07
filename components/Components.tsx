@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, memo } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
 import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, SaveIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon, BookmarkIcon, TumbiLogo, RefreshCwIcon, ShareIcon, EyeIcon, VerifiedIcon } from './Icons';
 import { CATEGORIES, SUB_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
+import { useTranslation } from 'react-i18next';
 import { Share } from '@capacitor/share';
 
 const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
@@ -424,6 +425,7 @@ export const CategoryPill: React.FC<CategoryPillProps> = ({ category, isSelected
 // --- Add/Edit Listing Form ---
 interface AddListingProps { onClose: () => void; onSubmit: (listingData: any, imageUrls: string[]) => void; onUploadPhotos: (photos: File[]) => Promise<string[]>; initialData?: Listing; isSubmitting?: boolean; }
 export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData, isSubmitting = false }: AddListingProps) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({ title: '', price: '', unit: 'pcs', location: 'Addis Ababa', mainCategory: '', subCategory: '', description: '' });
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
@@ -444,7 +446,7 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
         const filesArray = Array.from(e.target.files);
         const remainingSlots = 5 - photoPreviews.length;
         const filesToAdd = filesArray.slice(0, remainingSlots);
-        if (filesArray.length > remainingSlots) alert(`Max 5 photos.`);
+        if (filesArray.length > remainingSlots) alert(t('messages.maxPhotos'));
         if (filesToAdd.length === 0) return;
         const optimizedFiles = await Promise.all(filesToAdd.map(file => resizeImage(file, 800, 800, 0.8)));
         const newPreviews = optimizedFiles.map(file => URL.createObjectURL(file));
@@ -455,7 +457,7 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
             setUploadedUrls(prev => [...prev, ...urls]);
             setUploadProgress(100);
         } catch (error) {
-            alert(`Failed: ${error}`);
+            alert(t('messages.uploadFailed', { error }));
             setPhotoPreviews(prev => prev.filter(p => !newPreviews.includes(p)));
             newPreviews.forEach(url => URL.revokeObjectURL(url));
         } finally { setIsUploading(false); }
@@ -471,8 +473,8 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting || isUploading || uploadedUrls.length === 0) { if (uploadedUrls.length === 0) alert("Need photo."); return; }
-    if (!formData.mainCategory || !formData.subCategory) { alert("Select category."); return; }
+    if (isSubmitting || isUploading || uploadedUrls.length === 0) { if (uploadedUrls.length === 0) alert(t('messages.needPhoto')); return; }
+    if (!formData.mainCategory || !formData.subCategory) { alert(t('messages.selectCategory')); return; }
     onSubmit({ ...formData, price: Number(formData.price) }, uploadedUrls);
   };
 
@@ -483,12 +485,12 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white dark:bg-dark-bg rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-tumbi-500 text-white">
-          <h2 className="text-lg font-bold">{initialData ? 'Edit Ad' : 'Post Ad'}</h2>
+          <h2 className="text-lg font-bold">{initialData ? t('buttons.editAd') : t('buttons.postAd')}</h2>
           <button onClick={onClose} disabled={isSubmitting} className="p-1 hover:bg-white/20 rounded-full text-white transition-colors"><XIcon className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
             <div>
-                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Photos ({photoPreviews.length}/5)</label>
+                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t('form.photos')} ({photoPreviews.length}/5)</label>
                 {isUploading && (
                     <div className="mb-2">
                         <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2"><div className="bg-tumbi-500 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div></div>
@@ -503,39 +505,39 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
                     ))}
                    {photoPreviews.length < 5 && (
                         <div onClick={() => !isSubmitting && !isUploading && fileInputRef.current?.click()} className={`aspect-square border-2 border-dashed border-gray-300 dark:border-dark-border rounded-lg flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-50 transition-all ${isSubmitting || isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                            <CameraIcon className="w-8 h-8 mb-1" /><span className="text-[10px] text-center">Add Photo</span>
+                            <CameraIcon className="w-8 h-8 mb-1" /><span className="text-[10px] text-center">{t('buttons.addPhoto')}</span>
                         </div>
                    )}
                 </div>
                 <input type="file" multiple ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" disabled={isSubmitting || isUploading || photoPreviews.length >= 5} />
             </div>
-             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="What are you selling/offering?" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder={t('form.titlePlaceholder')} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Main Category</label>
+                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t('form.mainCategory')}</label>
                     <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.mainCategory} onChange={e => setFormData({...formData, mainCategory: e.target.value, subCategory: ''})}>
-                        <option value="">Select Group</option>{mainCategories.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}
+                        <option value="">{t('form.selectGroup')}</option>{mainCategories.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}
                     </select></div>
-                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Sub-Category</label>
+                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t('form.subCategory')}</label>
                     <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm disabled:opacity-50 cursor-pointer" value={formData.subCategory} onChange={e => setFormData({...formData, subCategory: e.target.value})} disabled={!formData.mainCategory}>
-                        <option value="">Select Item</option>{availableSubCategories.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}
+                        <option value="">{t('form.selectItem')}</option>{availableSubCategories.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}
                     </select></div>
             </div>
              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Price (ETB)</label>
-                    <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder="Amount" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} /></div>
-                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Unit</label>
+                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t('form.price')} (ETB)</label>
+                    <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder={t('form.amount')} value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} /></div>
+                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t('form.unit')}</label>
                     <select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>
                         {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}
                     </select></div>
              </div>
-            <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Location</label>
+            <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t('form.location')}</label>
                 <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
                     {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                 </select></div>
-            <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Description</label>
-                <textarea required rows={4} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder="Provide more details about your listing..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
+            <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t('form.description')}</label>
+                <textarea required rows={4} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder={t('form.descriptionPlaceholder')} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
             <div className="pt-2"><button type="submit" disabled={isSubmitting || isUploading} className={`w-full bg-tumbi-600 text-white font-bold py-4 rounded-lg flex justify-center items-center active:scale-[0.98] transition-all ${isSubmitting || isUploading ? 'opacity-70' : 'hover:bg-tumbi-700 shadow-lg'}`}>
-                    {isSubmitting ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : (initialData ? 'Update Ad' : 'Post Ad Now')}
+                    {isSubmitting ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : (initialData ? t('buttons.updateAd') : t('buttons.postAdNow'))}
                 </button></div>
         </form>
       </div>
@@ -545,6 +547,7 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
 
 // --- Edit Profile Modal ---
 export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClose: () => void, onSave: (data: { name: string, email: string, location: string, companyName?: string, profileImage?: string }) => void }) => {
+    const { t } = useTranslation();
     const [formData, setFormData] = useState({ name: user.name, email: user.email || '', location: user.location, companyName: user.companyName || '', profileImage: user.profileImage || '' });
     const [isLoading, setIsLoading] = useState(false);
     const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -585,21 +588,21 @@ export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClos
                             <button type="button" onClick={() => profileInputRef.current?.click()} className="absolute bottom-0 right-0 bg-tumbi-600 text-white p-1.5 rounded-full shadow-lg hover:bg-tumbi-700 transition-all transform hover:scale-110"><CameraIcon className="w-3.5 h-3.5" /></button>
                             <input type="file" ref={profileInputRef} className="hidden" accept="image/*" onChange={handleProfileImageUpload} />
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">Edit Profile</h2>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-dark-text">{t('profile.editProfile')}</h2>
                     </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label>
-                            <input required placeholder="Full Name" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Company Name (Optional)</label>
-                            <input placeholder="Sunshine Construction" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address (Optional)</label>
-                            <input type="email" placeholder="Email Address" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Location</label>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('profile.fullName')}</label>
+                            <input required placeholder={t('profile.fullNamePlaceholder')} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('profile.companyName')}</label>
+                            <input placeholder={t('profile.companyNamePlaceholder')} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('profile.email')}</label>
+                            <input type="email" placeholder={t('profile.emailPlaceholder')} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-tumbi-500 outline-none bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('profile.location')}</label>
                             <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 text-sm bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none cursor-pointer" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
                                 {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
                             </select></div>
                         <button type="submit" disabled={isLoading || isUploadingImage} className="w-full bg-tumbi-600 text-white font-bold py-3 rounded-lg hover:bg-tumbi-700 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center mt-4">
-                             {isLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'Save Changes'}
+                             {isLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : t('buttons.saveChanges')}
                         </button>
                     </form>
                 </div>
@@ -610,6 +613,7 @@ export const EditProfileModal = ({ user, onClose, onSave }: { user: User, onClos
 
 // --- Vendor Profile View ---
 export const VendorProfileView = ({ vendorId, listings, onBack, onOpenListing }: { vendorId: string, listings: Listing[], onBack: () => void, onOpenListing: (id: string) => void }) => {
+    const { t } = useTranslation();
     const vendorListings = listings.filter(l => l.sellerId === vendorId);
     const vendorName = vendorListings[0]?.sellerName || 'Vendor';
     const vendorImage = vendorListings[0]?.sellerImage;
@@ -618,7 +622,7 @@ export const VendorProfileView = ({ vendorId, listings, onBack, onOpenListing }:
         <div className="fixed inset-0 z-[60] bg-gray-50 dark:bg-dark-bg overflow-y-auto pb-24">
             <header className="sticky top-0 z-30 bg-white dark:bg-dark-card border-b border-gray-200 dark:border-dark-border p-4 flex items-center shadow-sm">
                 <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full transition-colors"><ChevronLeftIcon className="w-6 h-6 dark:text-dark-text" /></button>
-                <h2 className="text-xl font-bold dark:text-dark-text truncate">Listings by {vendorName}</h2>
+                <h2 className="text-xl font-bold dark:text-dark-text truncate">{t('vendor.listingsBy')} {vendorName}</h2>
             </header>
             <div className="max-w-4xl mx-auto p-4">
                 <div className="bg-white dark:bg-dark-card rounded-xl p-6 mb-8 border border-gray-100 dark:border-dark-border flex items-center space-x-4 shadow-sm">
@@ -628,15 +632,15 @@ export const VendorProfileView = ({ vendorId, listings, onBack, onOpenListing }:
                             <h3 className="text-xl font-bold dark:text-dark-text">{vendorName}</h3>
                             {isVerified && (
                                 <div className="flex items-center text-blue-500">
-                                    <span className="hidden md:inline text-xs font-bold mr-1 uppercase">Verified</span>
+                                    <span className="hidden md:inline text-xs font-bold mr-1 uppercase">{t('vendor.verified')}</span>
                                     <VerifiedIcon className="w-5 h-5" />
                                 </div>
                             )}
                         </div>
-                        <p className="text-sm text-gray-500 dark:text-dark-subtext">Verified Vendor • {vendorListings.length} Active Ads</p>
+                        <p className="text-sm text-gray-500 dark:text-dark-subtext">{t('vendor.verifiedVendor')} • {vendorListings.length} {t('vendor.activeAds')}</p>
                     </div>
                 </div>
-                {vendorListings.length === 0 ? <p className="text-center py-20 text-gray-500">No active listings.</p> :
+                {vendorListings.length === 0 ? <p className="text-center py-20 text-gray-500">{t('vendor.noActiveListings')}</p> :
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{vendorListings.map(item => (<ListingCard key={item.id} listing={item} onClick={() => onOpenListing(String(item.id))} />))}</div>}
             </div>
         </div>
@@ -645,11 +649,12 @@ export const VendorProfileView = ({ vendorId, listings, onBack, onOpenListing }:
 
 // --- Saved View ---
 export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listings: Listing[], onOpen: (id: string) => void, savedIds: Set<string>, onToggleSave: (id: string) => void }) => {
+    const { t } = useTranslation();
     const savedListings = listings.filter(l => savedIds.has(String(l.id)));
     return (
         <div className="max-w-4xl mx-auto p-4 pb-24">
-             <h2 className="text-2xl font-bold mb-4 dark:text-dark-text">Saved Items</h2>
-             {savedListings.length === 0 ? <div className="text-center py-20 text-gray-500 dark:text-dark-subtext"><SaveIcon className="w-12 h-12 mx-auto mb-2 opacity-20" /><p>No saved items yet.</p></div> :
+             <h2 className="text-2xl font-bold mb-4 dark:text-dark-text">{t('saved.savedItems')}</h2>
+             {savedListings.length === 0 ? <div className="text-center py-20 text-gray-500 dark:text-dark-subtext"><SaveIcon className="w-12 h-12 mx-auto mb-2 opacity-20" /><p>{t('saved.noSavedItems')}</p></div> :
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{savedListings.map(item => (<ListingCard key={item.id} listing={item} onClick={() => onOpen(String(item.id))} isSaved={true} onToggleSave={(e) => { e.stopPropagation(); onToggleSave(String(item.id)); }} />))}</div>}
         </div>
     );
@@ -657,6 +662,7 @@ export const SavedView = ({ listings, onOpen, savedIds, onToggleSave }: { listin
 
 // --- Messages View ---
 export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: User, onOpenChat: (session: ChatSession) => void, onUnreadCountChange?: (count: number) => void }) => {
+    const { t } = useTranslation();
     const [sessions, setSessions] = useState<ChatSession[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
@@ -674,12 +680,12 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
         }
         loadConversations();
     }, [user, onUnreadCountChange]);
-    if (loading) return <div className="p-10 text-center text-gray-400">Loading...</div>;
+    if (loading) return <div className="p-10 text-center text-gray-400">{t('forms.loading')}</div>;
     return (
         <div className="max-w-7xl mx-auto h-[calc(100vh-240px)] bg-white dark:bg-dark-card rounded-xl shadow-md border border-gray-100 dark:border-dark-border overflow-hidden flex flex-col md:flex-row my-2 md:my-4 mx-2 md:mx-4">
             <div className={`w-full md:w-96 border-r border-gray-100 dark:border-dark-border flex-shrink-0 flex flex-col ${selectedSession ? 'hidden md:flex' : 'flex'}`}>
-                <div className="p-4 border-b border-gray-100 dark:border-dark-border bg-gray-50 dark:bg-dark-bg"><h2 className="text-lg font-bold dark:text-dark-text">Chats</h2></div>
-                <div className="flex-1 overflow-y-auto">{sessions.length === 0 ? <div className="text-center py-10 px-4 text-gray-500">No chats.</div> : sessions.map(session => (
+                <div className="p-4 border-b border-gray-100 dark:border-dark-border bg-gray-50 dark:bg-dark-bg"><h2 className="text-lg font-bold dark:text-dark-text">{t('buttons.messages')}</h2></div>
+                <div className="flex-1 overflow-y-auto">{sessions.length === 0 ? <div className="text-center py-10 px-4 text-gray-500">{t('messages.noChats')}</div> : sessions.map(session => (
                             <div key={session.conversationId} onClick={async () => { 
                                     const token = localStorage.getItem('token');
                                     if (token) {
@@ -720,6 +726,7 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
 
 // --- Profile View ---
 export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode, onEditListing, onDeleteListing, onEditProfile }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean, onEditListing: (listing: Listing) => void, onDeleteListing: (id: string) => void, onEditProfile: () => void }) => {
+    const { t } = useTranslation();
     const [subPage, setSubPage] = useState<'main' | 'my-listings'>('main');
     const [infoModal, setInfoModal] = useState<'upgrade' | 'about' | null>(null);
     
@@ -728,8 +735,8 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
     if (subPage === 'my-listings') {
         return (
             <div className="max-w-4xl mx-auto p-4 pb-24">
-                <div className="flex items-center space-x-4 mb-6"><button onClick={() => setSubPage('main')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeftIcon className="w-6 h-6 dark:text-dark-text" /></button><h2 className="text-2xl font-bold dark:text-dark-text">My Listings</h2></div>
-                {myListings.length === 0 ? <p className="text-center py-20 text-gray-500">No ads yet.</p> :
+                <div className="flex items-center space-x-4 mb-6"><button onClick={() => setSubPage('main')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeftIcon className="w-6 h-6 dark:text-dark-text" /></button><h2 className="text-2xl font-bold dark:text-dark-text">{t('profile.myListings')}</h2></div>
+                {myListings.length === 0 ? <p className="text-center py-20 text-gray-500">{t('profile.noAdsYet')}</p> :
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{myListings.map(item => (<ListingCard key={item.id} listing={item} onClick={() => onOpenListing(String(item.id))} showActions={true} onEdit={onEditListing} onDelete={onDeleteListing} />))}</div>}
             </div>
         );
@@ -739,23 +746,23 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
         <div className="max-w-4xl mx-auto p-4 pb-24">
             {/* Info Modals */}
             {infoModal === 'upgrade' && (
-                <InfoModal title="Upgrade to Pro" onClose={() => setInfoModal(null)}>
+                <InfoModal title={t('profile.upgradeToPro')} onClose={() => setInfoModal(null)}>
                     <div className="text-center space-y-6">
                         <div className="w-20 h-20 bg-tumbi-100 rounded-2xl flex items-center justify-center mx-auto">
                             <VerifiedIcon className="w-12 h-12 text-tumbi-600" />
                         </div>
                         <div className="space-y-2">
-                            <h3 className="text-xl font-bold">Become a Verified Vendor</h3>
-                            <p className="text-gray-600 dark:text-dark-subtext text-sm">Get the blue checkmark, prioritize your listings in search, and build trust with your customers.</p>
+                            <h3 className="text-xl font-bold">{t('profile.becomeVerified')}</h3>
+                            <p className="text-gray-600 dark:text-dark-subtext text-sm">{t('profile.verifiedDescription')}</p>
                         </div>
                         <div className="space-y-3 pt-4">
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Contact our team to upgrade</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('profile.contactTeam')}</p>
                             <div className="grid grid-cols-1 gap-3">
                                 <a href="https://wa.me/251911289217?text=Hi%20Tumbi%20Team,%20I%20want%20to%20upgrade%20my%20account%20to%20Pro." target="_blank" className="flex items-center justify-center p-4 bg-[#25D366] text-white rounded-xl font-bold hover:opacity-90 transition-opacity">
-                                    <MessageCircleIcon className="w-5 h-5 mr-2" /> WhatsApp Support
+                                    <MessageCircleIcon className="w-5 h-5 mr-2" /> {t('profile.whatsappSupport')}
                                 </a>
                                 <a href="https://t.me/niqusolutions" target="_blank" className="flex items-center justify-center p-4 bg-[#0088cc] text-white rounded-xl font-bold hover:opacity-90 transition-opacity">
-                                    <RefreshCwIcon className="w-5 h-5 mr-2 rotate-45" /> Telegram Support
+                                    <RefreshCwIcon className="w-5 h-5 mr-2 rotate-45" /> {t('profile.telegramSupport')}
                                 </a>
                             </div>
                         </div>
@@ -764,7 +771,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
             )}
 
             {infoModal === 'about' && (
-                <InfoModal title="About Tumbi" onClose={() => setInfoModal(null)}>
+                <InfoModal title={t('profile.aboutTumbi')} onClose={() => setInfoModal(null)}>
                     <div className="space-y-6">
                         <div className="flex items-center space-x-4">
                             <TumbiLogo className="w-16 h-16 rounded-xl" />
@@ -793,7 +800,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
                             <h2 className="text-xl font-bold dark:text-dark-text truncate">{user.companyName || user.name}</h2>
                             {user.isVerified && (
                                 <div className="flex items-center text-blue-500 flex-shrink-0">
-                                    <span className="hidden md:inline text-xs font-bold mr-1 uppercase">Verified</span>
+                                    <span className="hidden md:inline text-xs font-bold mr-1 uppercase">{t('vendor.verified')}</span>
                                     <VerifiedIcon className="w-5 h-5" />
                                 </div>
                             )}
@@ -807,26 +814,26 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
             
             <div className="space-y-2">
                 <button onClick={() => setSubPage('my-listings')} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 font-medium text-gray-700 dark:text-dark-text group">
-                    <div className="flex items-center"><HammerIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> My Listings</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
+                    <div className="flex items-center"><HammerIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> {t('profile.myListings')}</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
                 </button>
                 <button onClick={onEditProfile} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 font-medium text-gray-700 dark:text-dark-text group">
-                    <div className="flex items-center"><UserIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> Account Settings</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
+                    <div className="flex items-center"><UserIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> {t('profile.accountSettings')}</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
                 </button>
                 <button onClick={toggleDarkMode} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 font-medium text-gray-700 dark:text-dark-text group">
-                    <div className="flex items-center">{isDarkMode ? <SunIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-yellow-500" /> : <MoonIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" />} Toggle Theme</div>
+                    <div className="flex items-center">{isDarkMode ? <SunIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-yellow-500" /> : <MoonIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" />} {t('profile.toggleTheme')}</div>
                     <div className={`w-10 h-5 rounded-full relative transition-colors ${isDarkMode ? 'bg-tumbi-500' : 'bg-gray-200'}`}><div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${isDarkMode ? 'right-0.5' : 'left-0.5'}`}></div></div>
                 </button>
                 
                 {/* New Buttons */}
                 <button onClick={() => setInfoModal('upgrade')} className="w-full flex items-center justify-between p-4 bg-tumbi-50 dark:bg-tumbi-900/20 rounded-lg border border-tumbi-100 dark:border-tumbi-800/30 hover:bg-tumbi-100 font-bold text-tumbi-700 dark:text-tumbi-400 group transition-colors">
-                    <div className="flex items-center"><VerifiedIcon className="w-5 h-5 mr-3 text-tumbi-500" /> Upgrade to Pro</div><ChevronRightIcon className="w-5 h-5 opacity-50" />
+                    <div className="flex items-center"><VerifiedIcon className="w-5 h-5 mr-3 text-tumbi-500" /> {t('profile.upgradeToPro')}</div><ChevronRightIcon className="w-5 h-5 opacity-50" />
                 </button>
                 <button onClick={() => setInfoModal('about')} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 font-medium text-gray-700 dark:text-dark-text group">
-                    <div className="flex items-center"><HelpCircleIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> About Tumbi</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
+                    <div className="flex items-center"><HelpCircleIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> {t('profile.aboutTumbi')}</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
                 </button>
 
                 <div className="pt-4 mt-4 border-t border-gray-100 dark:border-dark-border">
-                    <button onClick={onLogout} className="w-full flex items-center p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 transition-colors font-medium text-red-600"><LogOutIcon className="w-5 h-5 mr-3" /> Log Out</button>
+                    <button onClick={onLogout} className="w-full flex items-center p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-red-50 transition-colors font-medium text-red-600"><LogOutIcon className="w-5 h-5 mr-3" /> {t('profile.logOut')}</button>
                 </div>
             </div>
         </div>
@@ -835,6 +842,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
 
 // --- Chat Conversation View ---
 export const ChatConversationView = ({ session, user, onBack, embedded = false }: { session: ChatSession; user: User; onBack: () => void; embedded?: boolean }) => {
+    const { t } = useTranslation();
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -909,7 +917,7 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
                          })}
                     </div>
                     <div className="p-4 border-t dark:border-dark-border bg-white dark:bg-dark-card flex items-center space-x-2">
-                        <input className="flex-grow border border-gray-300 dark:border-dark-border rounded-full px-5 py-2.5 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none transition-all disabled:opacity-50" placeholder={isSending ? "Sending..." : "Type a message..."} value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} disabled={isSending} />
+                        <input className="flex-grow border border-gray-300 dark:border-dark-border rounded-full px-5 py-2.5 bg-transparent dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none transition-all disabled:opacity-50" placeholder={isSending ? t('messages.sending') : t('messages.typeMessage')} value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} disabled={isSending} />
                         <button onClick={handleSend} disabled={!newMessage.trim() || isSending} className="p-3 bg-tumbi-600 rounded-full text-white disabled:opacity-50 hover:bg-tumbi-700 active:scale-95 transition-all flex-shrink-0">
                             {isSending ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <ArrowLeftIcon className="w-5 h-5 rotate-180" />}
                         </button>
@@ -952,6 +960,7 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
 
 // --- Detail View ---
 export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdit, onChat, onOpenVendor }: { listing: Listing | null; onBack: () => void; isSaved: boolean; onToggleSave: (id: string) => void; user: User | null; onEdit: (listing: Listing) => void; onChat: (listing: Listing) => void; onOpenVendor?: (id: string) => void; }) => {
+    const { t } = useTranslation();
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const touchStartRef = useRef<number>(0);
 
@@ -1073,7 +1082,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                             </div>
                         </div>
                     </div>
-                    <div className="p-6 bg-gray-50 dark:bg-dark-bg/50 border-t dark:border-dark-border">{isOwner ? (<button onClick={() => onEdit(listing)} className="w-full bg-gray-900 dark:bg-tumbi-600 hover:bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center transition-transform shadow-lg"><SettingsIcon className="w-5 h-5 mr-2" />Edit My Listing</button>) : (<div className="grid grid-cols-2 gap-3"><a href={`tel:${listing.sellerPhone || ''}`} className="flex items-center justify-center bg-white dark:bg-dark-card border-2 border-tumbi-500 text-tumbi-600 font-bold py-3 rounded-xl hover:bg-tumbi-50 transition-colors"><PhoneIcon className="w-5 h-5 mr-2" /> Call</a><button onClick={() => onChat(listing)} className="flex items-center justify-center bg-tumbi-600 hover:bg-tumbi-700 text-white font-bold py-3 rounded-xl active:scale-95 shadow-lg shadow-tumbi-200 dark:shadow-none"><MessageCircleIcon className="w-5 h-5 mr-2" /> Chat</button></div>)}</div>
+                    <div className="p-6 bg-gray-50 dark:bg-dark-bg/50 border-t dark:border-dark-border">{isOwner ? (<button onClick={() => onEdit(listing)} className="w-full bg-gray-900 dark:bg-tumbi-600 hover:bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center transition-transform shadow-lg"><SettingsIcon className="w-5 h-5 mr-2" />{t('buttons.editListing')}</button>) : (<div className="grid grid-cols-2 gap-3"><a href={`tel:${listing.sellerPhone || ''}`} className="flex items-center justify-center bg-white dark:bg-dark-card border-2 border-tumbi-500 text-tumbi-600 font-bold py-3 rounded-xl hover:bg-tumbi-50 transition-colors"><PhoneIcon className="w-5 h-5 mr-2" /> {t('buttons.call')}</a><button onClick={() => onChat(listing)} className="flex items-center justify-center bg-tumbi-600 hover:bg-tumbi-700 text-white font-bold py-3 rounded-xl active:scale-95 shadow-lg shadow-tumbi-200 dark:shadow-none"><MessageCircleIcon className="w-5 h-5 mr-2" /> {t('buttons.chat')}</button></div>)}</div>
                 </div>
             </div>
         </div>

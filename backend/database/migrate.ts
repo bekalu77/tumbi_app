@@ -39,4 +39,4 @@ async function migrate() {
     }
 }
 
-migrate();
+// migrate(); // Commented out to prevent accidental runs

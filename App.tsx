@@ -4,8 +4,9 @@ import { CATEGORIES, SUB_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
 import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal, VendorProfileView, MaintenanceView } from './components/Components';
 import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon, RefreshCwIcon, TumbiLogo } from './components/Icons';
-import ThemeToggle from './components/ThemeToggle';
+import { useTranslation } from 'react-i18next';
 import { App as CapApp } from '@capacitor/app';
+import './i18n';
 
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const DEFAULT_API_URL = isLocal ? "http://localhost:8787" : "https://tumbi-backend.bekalu77.workers.dev";
@@ -47,6 +48,8 @@ export default function App() {
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   const [editingListing, setEditingListing] = useState<Listing | undefined>(undefined);
   const [savedListingIds, setSavedListingIds] = useState<Set<string>>(new Set());
+
+  const { t, i18n } = useTranslation();
 
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [totalUnreadMessages, setTotalUnreadMessages] = useState(0);
@@ -294,16 +297,18 @@ export default function App() {
             <div className="max-w-6xl mx-auto px-4 py-3">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={resetAllFilters}><TumbiLogo className="w-8 h-8" color="white" /><h1 className="text-xl font-bold tracking-tight uppercase">TUMBI</h1></div>
-                    <ThemeToggle isDark={isDarkMode} toggle={toggleDarkMode} />
+                    <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'am' : 'en')} className="px-3 py-1 bg-white/20 rounded-full text-white text-sm font-medium hover:bg-white/30 transition-colors">
+                        {i18n.language === 'en' ? 'አማ' : 'EN'}
+                    </button>
                 </div>
                 <div className="relative w-full mb-3">
-                    <input type="text" placeholder="I am looking for..." className="w-full h-10 pl-4 pr-10 rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text outline-none focus:ring-2 focus:ring-tumbi-700 shadow-sm text-sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()} />
+                    <input type="text" placeholder={t('app.searchPlaceholder')} className="w-full h-10 pl-4 pr-10 rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text outline-none focus:ring-2 focus:ring-tumbi-700 shadow-sm text-sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()} />
                     <button onClick={handleApplyFilters} className="absolute right-0 top-0 h-10 px-3 text-gray-400 dark:text-dark-subtext"><SearchIcon className="w-5 h-5" /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}><option>All Cities</option>{ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}</select>
-                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>{CATEGORIES.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}</select>
-                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-500 appearance-none cursor-pointer" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}><option value="all">Sub-Categories</option>{selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}</select>
+                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}><option>{t('app.allCities')}</option>{ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}</select>
+                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>{CATEGORIES.map(cat => (<option key={cat.slug} value={cat.slug}>{t(`categories.${cat.slug}`)}</option>))}</select>
+                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-500 appearance-none cursor-pointer" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}><option value="all">{t('app.subCategories')}</option>{selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (<option key={sub.value} value={sub.value}>{t(`subcategories.${selectedMainCategory}.${sub.value}`)}</option>))}</select>
                 </div>
             </div>
         </header>
@@ -313,13 +318,13 @@ export default function App() {
                 <>
                 <div className="mb-6 flex justify-end">
                     <select className="bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg px-3 h-10 shadow-sm text-xs font-bold dark:text-dark-text outline-none cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                        <option value="date-desc">Newest</option><option value="date-asc">Oldest</option><option value="price-asc">Price: Low-High</option><option value="price-desc">Price: High-Low</option>
+                        <option value="date-desc">{t('sort.newest')}</option><option value="date-asc">{t('sort.oldest')}</option><option value="price-asc">{t('sort.priceLowHigh')}</option><option value="price-desc">{t('sort.priceHighLow')}</option>
                     </select>
                 </div>
                 {listings.length > 0 ? (
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} />))}</div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-24 text-center"><SearchIcon className="w-10 h-10 text-gray-400 mb-6" /><p className="text-xl text-gray-600 dark:text-dark-text font-bold">No items found</p></div>
+                    <div className="flex flex-col items-center justify-center py-24 text-center"><SearchIcon className="w-10 h-10 text-gray-400 mb-6" /><p className="text-xl text-gray-600 dark:text-dark-text font-bold">{t('messages.noListings')}</p></div>
                 )}
                 <div ref={loaderRef} className="h-20 flex items-center justify-center mt-4">{isLoadingMore && <RefreshCwIcon className="w-6 h-6 text-tumbi-600 animate-spin" />}</div>
                 </>

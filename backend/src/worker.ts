@@ -400,6 +400,13 @@ app.put('/api/listings/:id', async (c) => {
     }
 
     if (!result.length) return c.json({ message: 'Not authorized' }, 403);
+    
+    // Post to Telegram if status is active (background task)
+    if (result[0].status === 'active') {
+        const fullListing = { ...result[0], imageUrls: result[0].image_url ? result[0].image_url.split(',') : [], price: result[0].price, unit: result[0].unit, title: result[0].title, location: result[0].location, description: result[0].description, contact_phone: result[0].contact_phone };
+        c.executionCtx.waitUntil(postToTelegram(fullListing, c.env));
+    }
+    
     return c.json({ ...result[0], id: String(result[0].id) });
 });
 
@@ -655,6 +662,21 @@ app.post('/api/messages', async (c) => {
         console.error("Message send error:", e.message);
         return c.json({ message: e.message || 'Failed to send message' }, 500);
     }
+});
+
+app.post('/api/admin/post-all-listings', async (c) => {
+    const user = c.get('user');
+    if (!user.isAdmin) return c.json({ message: 'Not authorized' }, 403);
+    
+    const sql = neon(c.env.DATABASE_URL);
+    const listings = await sql`SELECT * FROM listings WHERE status = 'active' ORDER BY created_at DESC`;
+    
+    for (const listing of listings) {
+        const fullListing = { ...listing, imageUrls: listing.image_url ? listing.image_url.split(',') : [] };
+        c.executionCtx.waitUntil(postToTelegram(fullListing, c.env));
+    }
+    
+    return c.json({ message: 'Posting all listings to Telegram in background' });
 });
 
 export default app;
