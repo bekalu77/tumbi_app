@@ -191,6 +191,25 @@ export const MEASUREMENT_UNITS = [
     { value: 'trip', label: 'Per Trip' },
 ];
 
+export const getUnitDisplay = (unit: string): string => {
+  const unitMap: Record<string, string> = {
+    'pcs': 'piece',
+    'kg': 'kg',
+    'bag': 'bag',
+    'ton': 'ton',
+    'm': 'm',
+    'm3': 'm³',
+    'sqm': 'm²',
+    'biago': 'biago',
+    'hr': 'hour',
+    'day': 'day',
+    'month': 'month',
+    'job': 'job',
+    'trip': 'trip',
+  };
+  return unitMap[unit] || unit;
+};
+
 // Keep these for backward compatibility during migration
 export const PRODUCT_CATEGORIES = SUB_CATEGORIES.materials;
 export const SERVICE_CATEGORIES = SUB_CATEGORIES.services;

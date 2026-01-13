@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, memo } from 'react';
 import { Listing, Category, User, Message, ChatSession } from '../types';
 import { SearchIcon, MapPinIcon, PlusIcon, ArrowLeftIcon, UserIcon, MessageCircleIcon, SaveIcon, CameraIcon, SettingsIcon, HelpCircleIcon, LogOutIcon, HammerIcon, PhoneIcon, XIcon, ChevronLeftIcon, ChevronRightIcon, SunIcon, MoonIcon, TrashIcon, BookmarkIcon, TumbiLogo, RefreshCwIcon, ShareIcon, EyeIcon, VerifiedIcon } from './Icons';
-import { CATEGORIES, SUB_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES } from '../constants';
+import { CATEGORIES, SUB_CATEGORIES, MEASUREMENT_UNITS, ETHIOPIAN_CITIES, getUnitDisplay } from '../constants';
 import { Share } from '@capacitor/share';
 
 const API_URL = import.meta.env.VITE_API_URL || "https://tumbi-backend.bekalu77.workers.dev";
@@ -391,7 +391,7 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
         </div>
         <div className="p-1.5">
           <h3 className="font-medium text-xs text-gray-800 dark:text-dark-text line-clamp-1 leading-tight">{listing.title}</h3>
-          <p className="text-sm font-black text-tumbi-600 dark:text-tumbi-400 mt-0.5">ETB {listing.price.toLocaleString()}</p>
+          <p className="text-sm font-black text-tumbi-600 dark:text-tumbi-400 mt-0.5">ETB {listing.price.toLocaleString()} <span className="text-xs font-normal text-gray-500 dark:text-dark-subtext">per {getUnitDisplay(listing.unit)}</span></p>
           <div className="text-[9px] text-gray-500 dark:text-dark-subtext mt-1 space-y-0.5">
             <div className="flex items-center"><MapPinIcon className="w-2.5 h-2.5 mr-1 flex-shrink-0" /><span className="truncate">{listing.location}</span></div>
             <div className="flex flex-wrap gap-1 mt-1">
@@ -424,123 +424,165 @@ export const CategoryPill: React.FC<CategoryPillProps> = ({ category, isSelected
 // --- Add/Edit Listing Form ---
 interface AddListingProps { onClose: () => void; onSubmit: (listingData: any, imageUrls: string[]) => void; onUploadPhotos: (photos: File[]) => Promise<string[]>; initialData?: Listing; isSubmitting?: boolean; }
 export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData, isSubmitting = false }: AddListingProps) => {
-  const [formData, setFormData] = useState({ title: '', price: '', unit: 'pcs', location: 'Addis Ababa', mainCategory: '', subCategory: '', description: '' });
-  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
-  const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+    const [formData, setFormData] = useState({ title: '', price: '', unit: 'pcs', location: 'Addis Ababa', mainCategory: '', subCategory: '', description: '' });
+    const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+    const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (initialData) {
-        setFormData({ title: initialData.title, price: initialData.price.toString(), unit: initialData.unit, location: initialData.location, mainCategory: initialData.mainCategory, subCategory: initialData.subCategory, description: initialData.description });
-        if (Array.isArray(initialData.imageUrls)) { setPhotoPreviews(initialData.imageUrls); setUploadedUrls(initialData.imageUrls); }
-    }
-    return () => photoPreviews.forEach(preview => { if (preview.startsWith('blob:')) URL.revokeObjectURL(preview); });
-  }, [initialData]);
+    useEffect(() => {
+        if (initialData) {
+            setFormData({ title: initialData.title, price: initialData.price.toString(), unit: initialData.unit, location: initialData.location, mainCategory: initialData.mainCategory, subCategory: initialData.subCategory, description: initialData.description });
+            if (Array.isArray(initialData.imageUrls)) { setPhotoPreviews(initialData.imageUrls); setUploadedUrls(initialData.imageUrls); }
+        }
+        return () => { photoPreviews.forEach(preview => { if (preview.startsWith('blob:')) URL.revokeObjectURL(preview); }); };
+    }, [initialData]);
 
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
         const filesArray = Array.from(e.target.files);
         const remainingSlots = 5 - photoPreviews.length;
         const filesToAdd = filesArray.slice(0, remainingSlots);
-        if (filesArray.length > remainingSlots) alert(`Max 5 photos.`);
         if (filesToAdd.length === 0) return;
-        const optimizedFiles = await Promise.all(filesToAdd.map(file => resizeImage(file, 800, 800, 0.8)));
-        const newPreviews = optimizedFiles.map(file => URL.createObjectURL(file));
-        setPhotoPreviews(prev => [...prev, ...newPreviews]);
-        setIsUploading(true); setUploadProgress(10);
+        setIsUploading(true);
         try {
+            const optimizedFiles = await Promise.all(filesToAdd.map(file => resizeImage(file, 800, 800, 0.8)));
+            const newPreviews = optimizedFiles.map(f => URL.createObjectURL(f));
+            setPhotoPreviews(prev => [...prev, ...newPreviews]);
             const urls = await onUploadPhotos(optimizedFiles);
             setUploadedUrls(prev => [...prev, ...urls]);
-            setUploadProgress(100);
-        } catch (error) {
-            alert(`Failed: ${error}`);
-            setPhotoPreviews(prev => prev.filter(p => !newPreviews.includes(p)));
-            newPreviews.forEach(url => URL.revokeObjectURL(url));
-        } finally { setIsUploading(false); }
-    }
-  };
+        } catch (err) {
+            console.error('Upload error', err);
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
-  const removePhoto = (index: number) => {
-      const previewToRemove = photoPreviews[index];
-      setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
-      setUploadedUrls(prev => prev.filter((_, i) => i !== index));
-      if (previewToRemove.startsWith('blob:')) URL.revokeObjectURL(previewToRemove);
-  }
+    const removePhoto = (idx: number) => {
+        const p = photoPreviews[idx];
+        setPhotoPreviews(prev => prev.filter((_, i) => i !== idx));
+        setUploadedUrls(prev => prev.filter((_, i) => i !== idx));
+        if (p && p.startsWith('blob:')) URL.revokeObjectURL(p);
+    };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting || isUploading || uploadedUrls.length === 0) { if (uploadedUrls.length === 0) alert("Need photo."); return; }
-    if (!formData.mainCategory || !formData.subCategory) { alert("Select category."); return; }
-    onSubmit({ ...formData, price: Number(formData.price) }, uploadedUrls);
-  };
+    const [step, setStep] = useState(0);
+    const mainCategories = CATEGORIES.filter(c => c.slug !== 'all');
+    const availableSubCategories = formData.mainCategory ? SUB_CATEGORIES[formData.mainCategory] || [] : [];
 
-  const mainCategories = CATEGORIES.filter(c => c.slug !== 'all');
-  const availableSubCategories = formData.mainCategory ? SUB_CATEGORIES[formData.mainCategory] || [] : [];
+    const next = () => setStep(s => Math.min(4, s + 1));
+    const prev = () => setStep(s => Math.max(0, s - 1));
 
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white dark:bg-dark-bg rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-tumbi-500 text-white">
-          <h2 className="text-lg font-bold">{initialData ? 'Edit Ad' : 'Post Ad'}</h2>
-          <button onClick={onClose} disabled={isSubmitting} className="p-1 hover:bg-white/20 rounded-full text-white transition-colors"><XIcon className="w-5 h-5" /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
-            <div>
-                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Photos ({photoPreviews.length}/5)</label>
-                {isUploading && (
-                    <div className="mb-2">
-                        <div className="w-full bg-gray-200 dark:bg-dark-border rounded-full h-2"><div className="bg-tumbi-500 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div></div>
-                    </div>
-                )}
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                    {photoPreviews.map((preview, index) => (
-                        <div key={index} className="relative aspect-square border dark:border-dark-border rounded-lg overflow-hidden">
-                            <img src={preview} alt={`Preview ${index}`} className="w-full h-full object-cover" />
-                            <button type="button" onClick={() => removePhoto(index)} disabled={isUploading} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-black/70 transition-colors"><XIcon className="w-3 h-3" /></button>
-                        </div>
-                    ))}
-                   {photoPreviews.length < 5 && (
-                        <div onClick={() => !isSubmitting && !isUploading && fileInputRef.current?.click()} className={`aspect-square border-2 border-dashed border-gray-300 dark:border-dark-border rounded-lg flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-50 transition-all ${isSubmitting || isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                            <CameraIcon className="w-8 h-8 mb-1" /><span className="text-[10px] text-center">Add Photo</span>
-                        </div>
-                   )}
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (uploadedUrls.length === 0) { alert('Please add at least one photo.'); return; }
+        onSubmit({ ...formData, price: Number(formData.price) }, uploadedUrls);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white dark:bg-dark-bg rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="p-4 border-b dark:border-dark-border flex items-center justify-between bg-tumbi-500 text-white">
+                    <h2 className="text-lg font-bold">{initialData ? 'Edit Ad' : 'Post Ad'}</h2>
+                    <button onClick={onClose} disabled={isSubmitting} className="p-1 hover:bg-white/20 rounded-full text-white transition-colors"><XIcon className="w-5 h-5" /></button>
                 </div>
-                <input type="file" multiple ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" disabled={isSubmitting || isUploading || photoPreviews.length >= 5} />
+
+                <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
+                    {/* Step 0: Title */}
+                    {step === 0 && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Title</label>
+                            <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="What are you selling/offering?" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                        </div>
+                    )}
+
+                    {/* Step 1: Price & Unit */}
+                    {step === 1 && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Price (ETB)</label>
+                                <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder="Amount" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Unit</label>
+                                <select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>
+                                    {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}
+                                </select>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Step 2: Category */}
+                    {step === 2 && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Main Category</label>
+                                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.mainCategory} onChange={e => setFormData({...formData, mainCategory: e.target.value, subCategory: ''})}>
+                                    <option value="">Select Group</option>
+                                    {mainCategories.map(cat => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Sub-Category</label>
+                                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm disabled:opacity-50 cursor-pointer" value={formData.subCategory} onChange={e => setFormData({...formData, subCategory: e.target.value})} disabled={!formData.mainCategory}>
+                                    <option value="">Select Item</option>
+                                    {availableSubCategories.map(sub => <option key={sub.value} value={sub.value}>{sub.label}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Step 3: Location & Description */}
+                    {step === 3 && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Location</label>
+                            <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
+                                {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
+                            </select>
+                            <div className="mt-2">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Description</label>
+                                <textarea required rows={4} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder="Provide more details about your listing..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Step 4: Photos */}
+                    {step === 4 && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Photos ({photoPreviews.length}/5)</label>
+                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
+                                {photoPreviews.map((p, i) => (
+                                    <div key={i} className="relative aspect-square border dark:border-dark-border rounded-lg overflow-hidden">
+                                        <img src={p} alt={`Preview ${i}`} className="w-full h-full object-cover" />
+                                        <button type="button" onClick={() => removePhoto(i)} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-black/70 transition-colors"><XIcon className="w-3 h-3" /></button>
+                                    </div>
+                                ))}
+                                {photoPreviews.length < 5 && (
+                                    <div className="aspect-square border-2 border-dashed border-gray-300 dark:border-dark-border rounded-lg flex flex-col items-center justify-center text-gray-500">
+                                        <CameraIcon className="w-8 h-8 mb-1" />
+                                        <div className="text-[10px] text-center space-y-1">
+                                            <button type="button" onClick={() => cameraInputRef.current?.click()} className="text-xs text-tumbi-600 hover:underline">Take Photo</button>
+                                            <button type="button" onClick={() => galleryInputRef.current?.click()} className="text-xs text-gray-600 hover:underline">Choose from Gallery</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <input type="file" multiple ref={galleryInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
+                            <input type="file" multiple ref={cameraInputRef} onChange={handleImageChange} accept="image/*" capture="environment" className="hidden" />
+                        </div>
+                    )}
+
+                    <div className="flex items-center space-x-2 pt-2">
+                        {step > 0 && <button type="button" onClick={prev} className="flex-1 bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg py-3 font-medium">Previous</button>}
+                        {step < 4 && <button type="button" onClick={next} className="flex-1 bg-tumbi-600 text-white font-bold py-3 rounded-lg hover:bg-tumbi-700">Next</button>}
+                        {step === 4 && <button type="submit" disabled={isSubmitting || isUploading} className={`flex-1 bg-tumbi-600 text-white font-bold py-3 rounded-lg flex justify-center items-center active:scale-[0.98] transition-all ${isSubmitting || isUploading ? 'opacity-70' : 'hover:bg-tumbi-700 shadow-lg'}`}>
+                            {isSubmitting ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : (initialData ? 'Update Ad' : 'Post Ad Now')}
+                        </button>}
+                    </div>
+                </form>
             </div>
-             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" placeholder="What are you selling/offering?" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-             <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Main Category</label>
-                    <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.mainCategory} onChange={e => setFormData({...formData, mainCategory: e.target.value, subCategory: ''})}>
-                        <option value="">Select Group</option>{mainCategories.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}
-                    </select></div>
-                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Sub-Category</label>
-                    <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm disabled:opacity-50 cursor-pointer" value={formData.subCategory} onChange={e => setFormData({...formData, subCategory: e.target.value})} disabled={!formData.mainCategory}>
-                        <option value="">Select Item</option>{availableSubCategories.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}
-                    </select></div>
-            </div>
-             <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Price (ETB)</label>
-                    <input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder="Amount" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} /></div>
-                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Unit</label>
-                    <select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>
-                        {MEASUREMENT_UNITS.map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}
-                    </select></div>
-             </div>
-            <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Location</label>
-                <select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}>
-                    {ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}
-                </select></div>
-            <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Description</label>
-                <textarea required rows={4} className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" placeholder="Provide more details about your listing..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
-            <div className="pt-2"><button type="submit" disabled={isSubmitting || isUploading} className={`w-full bg-tumbi-600 text-white font-bold py-4 rounded-lg flex justify-center items-center active:scale-[0.98] transition-all ${isSubmitting || isUploading ? 'opacity-70' : 'hover:bg-tumbi-700 shadow-lg'}`}>
-                    {isSubmitting ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : (initialData ? 'Update Ad' : 'Post Ad Now')}
-                </button></div>
-        </form>
-      </div>
-    </div>
-  );
+        </div>
+    );
 };
 
 // --- Edit Profile Modal ---
@@ -1041,7 +1083,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                                 <div className="flex items-center space-x-2"><button onClick={handleShare} className="p-2 rounded-full bg-gray-100 dark:bg-dark-border hover:bg-tumbi-50 transition-colors"><ShareIcon className="w-5 h-5" /></button><button onClick={() => onToggleSave(String(listing.id))} className={`p-2 rounded-full transition-colors ${isSaved ? 'bg-tumbi-50 text-tumbi-600' : 'hover:bg-gray-100 text-gray-400'}`}><BookmarkIcon className="w-6 h-6" filled={isSaved} /></button></div></div>
                             <h1 className="text-2xl font-bold text-gray-900 dark:text-dark-text leading-tight">{listing.title}</h1>
                             <div className="flex items-center space-x-2">
-                                <div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">ETB {listing.price.toLocaleString()}</div>
+                                <div className="text-3xl font-bold text-tumbi-600 dark:text-tumbi-400">ETB {listing.price.toLocaleString()} <span className="text-sm font-normal text-gray-500 dark:text-dark-subtext">per {getUnitDisplay(listing.unit)}</span></div>
                                 {/* View Counter (Only for Verified Vendors) */}
                                 {listing.isVerified && (
                                     <div className="flex items-center space-x-1 px-2 py-1 bg-gray-100 dark:bg-dark-bg rounded-lg text-gray-500 dark:text-dark-subtext text-xs font-bold">
