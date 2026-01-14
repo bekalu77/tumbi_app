@@ -695,3 +695,47 @@ app.post('/api/admin/post-all-listings', async (c) => {
 });
 
 export default app;
+
+// --- SCHEDULED BACKUP ---
+export async function scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+    console.log('Starting daily database backup...');
+    
+    try {
+        const sql = neon(env.DATABASE_URL);
+        
+        // Export users
+        const users = await sql`SELECT id, name, company_name, email, phone, location, profile_image, is_verified, is_admin, created_at FROM users`;
+        
+        // Export listings
+        const listings = await sql`SELECT id, user_id, title, description, price, unit, location, contact_phone, main_category, sub_category, image_url, status, views, share_slug, created_at FROM listings`;
+        
+        // Export conversations
+        const conversations = await sql`SELECT id, listing_id, buyer_id, seller_id, created_at FROM conversations`;
+        
+        // Export messages
+        const messages = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, is_read, created_at FROM messages`;
+        
+        // Export saved listings
+        const saved_listings = await sql`SELECT user_id, listing_id, created_at FROM saved_listings`;
+        
+        const backupData = {
+            users,
+            listings,
+            conversations,
+            messages,
+            saved_listings,
+            timestamp: new Date().toISOString()
+        };
+        
+        const backupJson = JSON.stringify(backupData, null, 2);
+        const backupKey = `backup-${new Date().toISOString().split('T')[0]}.json`; // e.g., backup-2026-01-14.json
+        
+        await env.R2_BUCKET.put(backupKey, backupJson, {
+            httpMetadata: { contentType: 'application/json' }
+        });
+        
+        console.log(`✅ Daily backup completed: ${backupKey}`);
+    } catch (error) {
+        console.error('❌ Daily backup failed:', error);
+    }
+}
