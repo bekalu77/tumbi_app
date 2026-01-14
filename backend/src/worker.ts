@@ -36,8 +36,8 @@ async function postToTelegram(listing: any, env: Bindings) {
 
 *${listing.title}*
 💰 *Price:* ${listing.price} ETB ${listing.unit ? `/ ${listing.unit}` : ''}
-� *Format:* ${listing.unit || 'N/A'}
-�📍 *Location:* ${listing.location}
+📏 *Format:* ${listing.unit || 'N/A'}
+📍 *Location:* ${listing.location}
 📞 *Contact:* ${listing.contact_phone || 'Contact via App'}
 
 📝 *Description:*
