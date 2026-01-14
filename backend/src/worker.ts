@@ -36,7 +36,8 @@ async function postToTelegram(listing: any, env: Bindings) {
 
 *${listing.title}*
 💰 *Price:* ${listing.price} ETB ${listing.unit ? `/ ${listing.unit}` : ''}
-📍 *Location:* ${listing.location}
+� *Format:* ${listing.unit || 'N/A'}
+�📍 *Location:* ${listing.location}
 📞 *Contact:* ${listing.contact_phone || 'Contact via App'}
 
 📝 *Description:*
@@ -44,7 +45,7 @@ ${listing.description ? (listing.description.length > 150 ? listing.description.
 
 🔗 *View Details:* [Click Here](${shareUrl})
 
-#Tumbi #${listing.main_category?.replace(/[^a-zA-Z0-9]/g, '')} #Ethiopia
+#Tumbi #${listing.main_category?.replace(/[^a-zA-Z0-9]/g, '') || 'General'} #${listing.sub_category?.replace(/[^a-zA-Z0-9]/g, '') || 'General'} #Ethiopia
     `.trim();
 
     for (const chat of TELEGRAM_CHATS) {

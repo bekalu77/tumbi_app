@@ -394,7 +394,8 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
           <p className="text-sm font-black text-tumbi-600 dark:text-tumbi-400 mt-0.5">ETB {listing.price.toLocaleString()} <span className="text-xs font-normal text-gray-500 dark:text-dark-subtext">per {getUnitDisplay(listing.unit)}</span></p>
           <div className="text-[9px] text-gray-500 dark:text-dark-subtext mt-1 space-y-0.5">
             <div className="flex items-center"><MapPinIcon className="w-2.5 h-2.5 mr-1 flex-shrink-0" /><span className="truncate">{listing.location}</span></div>
-            <div className="flex flex-wrap gap-1 mt-1">
+            <div className="hidden md:flex items-center mt-0.5"><UserIcon className="w-2.5 h-2.5 mr-1 flex-shrink-0" /><span className="truncate font-medium text-gray-700 dark:text-dark-text">{listing.sellerName}</span></div>
+            <div className="hidden md:flex flex-wrap gap-1 mt-1">
                 <span className="bg-gray-100 dark:bg-dark-border px-1 py-0.5 rounded-[3px] font-bold text-gray-600 dark:text-dark-subtext">{mainLabel}</span>
                 <span className="bg-tumbi-50 dark:bg-tumbi-900/30 px-1 py-0.5 rounded-[3px] font-bold text-tumbi-600 dark:text-tumbi-400 truncate">{subLabel}</span>
             </div>
