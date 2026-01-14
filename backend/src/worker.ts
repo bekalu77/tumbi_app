@@ -265,6 +265,7 @@ app.get('/api/listings', async (c) => {
     const city = c.req.query('city');
     const search = c.req.query('search');
     const sortBy = c.req.query('sortBy') || 'date-desc';
+    const userId = c.req.query('userId');
 
     let query = `
         SELECT l.*, u.name as "sellerName", u.phone as "sellerPhone", u.profile_image as "sellerImage", u.company_name as "sellerCompanyName", u.is_verified as "isVerified"
@@ -277,6 +278,7 @@ app.get('/api/listings', async (c) => {
     if (subCategory && subCategory !== 'all') { params.push(subCategory); query += ` AND l.sub_category = $${params.length}`; }
     if (city && city !== 'All Cities') { params.push(city); query += ` AND l.location = $${params.length}`; }
     if (search) { params.push(`%${search.toLowerCase()}%`); query += ` AND (LOWER(l.title) LIKE $${params.length} OR LOWER(l.description) LIKE $${params.length})`; }
+    if (userId) { params.push(userId); query += ` AND l.user_id = $${params.length}`; }
 
     let orderClause = ` ORDER BY u.is_verified DESC`;
     if (sortBy === 'price-asc') orderClause += `, l.price ASC`;
@@ -285,8 +287,12 @@ app.get('/api/listings', async (c) => {
     else orderClause += `, l.id DESC`; 
 
     query += orderClause;
-    params.push(limit); query += ` LIMIT $${params.length}`;
-    params.push(offset); query += ` OFFSET $${params.length}`;
+    
+    // Only apply pagination if not fetching for a specific user
+    if (!userId) {
+        params.push(limit); query += ` LIMIT $${params.length}`;
+        params.push(offset); query += ` OFFSET $${params.length}`;
+    }
 
     const rows = await sql(query, params);
     return c.json(rows.map(r => ({ 

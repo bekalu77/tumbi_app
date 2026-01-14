@@ -764,15 +764,52 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
 export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDarkMode, isDarkMode, onEditListing, onDeleteListing, onEditProfile }: { user: User, listings: Listing[], onLogout: () => void, onOpenListing: (id: string) => void, toggleDarkMode: () => void, isDarkMode: boolean, onEditListing: (listing: Listing) => void, onDeleteListing: (id: string) => void, onEditProfile: () => void }) => {
     const [subPage, setSubPage] = useState<'main' | 'my-listings'>('main');
     const [infoModal, setInfoModal] = useState<'upgrade' | 'about' | null>(null);
+    const [userListings, setUserListings] = useState<Listing[]>([]);
+    const [isLoadingUserListings, setIsLoadingUserListings] = useState(false);
     
-    const myListings = listings.filter(l => l.sellerId === String(user.id));
+    useEffect(() => {
+        const fetchUserListings = async () => {
+            setIsLoadingUserListings(true);
+            try {
+                const token = localStorage.getItem('token');
+                // For admins, fetch all listings; for regular users, fetch only their own
+                const url = user?.isAdmin 
+                    ? `${API_URL}/api/listings?limit=1000` // Get more listings for admins
+                    : `${API_URL}/api/listings?userId=${user?.id}`;
+                const response = await fetch(url, {
+                    headers: { 'x-access-token': token || '' }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setUserListings(data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch user listings:', error);
+            } finally {
+                setIsLoadingUserListings(false);
+            }
+        };
+        
+        if (user) {
+            fetchUserListings();
+        }
+    }, [user]);
+    
+    const myListings = userListings.length > 0 ? userListings : listings.filter(l => l.sellerId === String(user.id));
     
     if (subPage === 'my-listings') {
         return (
             <div className="max-w-4xl mx-auto p-4 pb-24">
-                <div className="flex items-center space-x-4 mb-6"><button onClick={() => setSubPage('main')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeftIcon className="w-6 h-6 dark:text-dark-text" /></button><h2 className="text-2xl font-bold dark:text-dark-text">My Listings</h2></div>
-                {myListings.length === 0 ? <p className="text-center py-20 text-gray-500">No ads yet.</p> :
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{myListings.map(item => (<ListingCard key={item.id} listing={item} onClick={() => onOpenListing(String(item.id))} showActions={true} onEdit={onEditListing} onDelete={onDeleteListing} />))}</div>}
+                <div className="flex items-center space-x-4 mb-6"><button onClick={() => setSubPage('main')} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeftIcon className="w-6 h-6 dark:text-dark-text" /></button><h2 className="text-2xl font-bold dark:text-dark-text">{user?.isAdmin ? 'All Listings' : 'My Listings'}</h2></div>
+                {isLoadingUserListings ? (
+                    <div className="flex justify-center py-20">
+                        <RefreshCwIcon className="w-8 h-8 text-tumbi-600 animate-spin" />
+                    </div>
+                ) : myListings.length === 0 ? (
+                    <p className="text-center py-20 text-gray-500">No ads yet.</p>
+                ) : (
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{myListings.map(item => (<ListingCard key={item.id} listing={item} onClick={() => onOpenListing(String(item.id))} showActions={true} onEdit={onEditListing} onDelete={onDeleteListing} />))}</div>
+                )}
             </div>
         );
     }
@@ -849,7 +886,7 @@ export const ProfileView = ({ user, listings, onLogout, onOpenListing, toggleDar
             
             <div className="space-y-2">
                 <button onClick={() => setSubPage('my-listings')} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 font-medium text-gray-700 dark:text-dark-text group">
-                    <div className="flex items-center"><HammerIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> My Listings</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
+                    <div className="flex items-center"><HammerIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> {user?.isAdmin ? 'All Listings' : 'My Listings'}</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
                 </button>
                 <button onClick={onEditProfile} className="w-full flex items-center justify-between p-4 bg-white dark:bg-dark-card rounded-lg border border-gray-100 dark:border-dark-border hover:bg-gray-50 font-medium text-gray-700 dark:text-dark-text group">
                     <div className="flex items-center"><UserIcon className="w-5 h-5 mr-3 text-gray-400 group-hover:text-tumbi-500" /> Account Settings</div><ChevronRightIcon className="w-5 h-5 opacity-30" />
@@ -1115,7 +1152,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                             </div>
                         </div>
                     </div>
-                    <div className="p-6 bg-gray-50 dark:bg-dark-bg/50 border-t dark:border-dark-border">{isOwner ? (<button onClick={() => onEdit(listing)} className="w-full bg-gray-900 dark:bg-tumbi-600 hover:bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center transition-transform shadow-lg"><SettingsIcon className="w-5 h-5 mr-2" />Edit My Listing</button>) : (<div className="grid grid-cols-2 gap-3"><a href={`tel:${listing.sellerPhone || ''}`} className="flex items-center justify-center bg-white dark:bg-dark-card border-2 border-tumbi-500 text-tumbi-600 font-bold py-3 rounded-xl hover:bg-tumbi-50 transition-colors"><PhoneIcon className="w-5 h-5 mr-2" /> Call</a><button onClick={() => onChat(listing)} className="flex items-center justify-center bg-tumbi-600 hover:bg-tumbi-700 text-white font-bold py-3 rounded-xl active:scale-95 shadow-lg shadow-tumbi-200 dark:shadow-none"><MessageCircleIcon className="w-5 h-5 mr-2" /> Chat</button></div>)}</div>
+                    <div className="p-6 bg-gray-50 dark:bg-dark-bg/50 border-t dark:border-dark-border">{(isOwner || (user && user.isAdmin)) ? (<button onClick={() => onEdit(listing)} className="w-full bg-gray-900 dark:bg-tumbi-600 hover:bg-gray-800 text-white font-bold py-4 rounded-xl flex items-center justify-center transition-transform shadow-lg"><SettingsIcon className="w-5 h-5 mr-2" />{isOwner ? 'Edit My Listing' : 'Edit Listing (Admin)'}</button>) : (<div className="grid grid-cols-2 gap-3"><a href={`tel:${listing.sellerPhone || ''}`} className="flex items-center justify-center bg-white dark:bg-dark-card border-2 border-tumbi-500 text-tumbi-600 font-bold py-3 rounded-xl hover:bg-tumbi-50 transition-colors"><PhoneIcon className="w-5 h-5 mr-2" /> Call</a><button onClick={() => onChat(listing)} className="flex items-center justify-center bg-tumbi-600 hover:bg-tumbi-700 text-white font-bold py-3 rounded-xl active:scale-95 shadow-lg shadow-tumbi-200 dark:shadow-none"><MessageCircleIcon className="w-5 h-5 mr-2" /> Chat</button></div>)}</div>
                 </div>
             </div>
         </div>

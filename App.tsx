@@ -272,10 +272,40 @@ export default function App() {
 
   const checkAuthAndGo = (targetView: ViewState) => { if (user) setViewState(targetView); else setShowAuth(true); };
 
+  const handleSaveProfile = async (data: { name: string, email: string, location: string, companyName?: string, profileImage?: string }) => {
+    const token = localStorage.getItem('token');
+    if (!token || !user) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/users/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (response.ok) {
+        // Update user state
+        const updatedUser = { ...user, ...data };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setShowEditProfile(false);
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Profile update error:', error);
+      alert('Failed to update profile');
+    }
+  };
+
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`}>
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} />}
-        {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={() => {}} />}
+        {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleSaveProfile} />}
         {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} />}
         {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === String(selectedListingId)) || null} onBack={closeListing} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={(l) => { setEditingListing(l); setViewState('edit'); }} onChat={(l) => {
              const token = localStorage.getItem('token');
@@ -317,7 +347,7 @@ export default function App() {
                     </select>
                 </div>
                 {listings.length > 0 ? (
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} />))}</div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} showActions={user?.isAdmin} onEdit={user?.isAdmin ? (l) => { setEditingListing(l); setViewState('edit'); } : undefined} onDelete={user?.isAdmin ? (id) => { fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => handleRefresh())} : undefined} />))}</div>
                 ) : (
                     <div className="flex flex-col items-center justify-center py-24 text-center"><SearchIcon className="w-10 h-10 text-gray-400 mb-6" /><p className="text-xl text-gray-600 dark:text-dark-text font-bold">No items found</p></div>
                 )}
