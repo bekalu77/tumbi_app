@@ -159,7 +159,7 @@ app.use('/api/*', async (c, next) => {
         if (!users.length) return c.json({ message: 'User not found' }, 401);
         
         const userData = users[0];
-        const adminPhones = [c.env.ADMIN_PHONE, '0911289217', '+251911289217'];
+        const adminPhones = [c.env.ADMIN_PHONE, '0912886217', '+251912886217'];
         const isManualAdmin = adminPhones.some(p => p && (userData.phone === p || getLoginVariants(userData.phone).includes(p)));
         const isAdmin = userData.isAdmin || isManualAdmin;
         
@@ -246,7 +246,7 @@ app.post('/api/login', async (c) => {
         const token = await sign({ id: String(user.id) }, c.env.JWT_SECRET);
         const { password: _, ...userData } = user;
         
-        const adminPhones = [c.env.ADMIN_PHONE, '0911289217', '+251911289217'];
+        const adminPhones = [c.env.ADMIN_PHONE, '0912886217', '+251912886217'];
         const isManualAdmin = adminPhones.some(p => p && (userData.phone === p || getLoginVariants(userData.phone).includes(p)));
         const isAdmin = userData.isAdmin || isManualAdmin;
 
