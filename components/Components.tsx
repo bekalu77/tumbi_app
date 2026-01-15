@@ -394,7 +394,14 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
           <p className="text-sm font-black text-tumbi-600 dark:text-tumbi-400 mt-0.5">ETB {listing.price.toLocaleString()} <span className="text-xs font-normal text-gray-500 dark:text-dark-subtext">per {getUnitDisplay(listing.unit)}</span></p>
           <div className="text-[9px] text-gray-500 dark:text-dark-subtext mt-1 space-y-0.5">
             <div className="flex items-center"><MapPinIcon className="w-2.5 h-2.5 mr-1 flex-shrink-0" /><span className="truncate">{listing.location}</span></div>
-            <div className="hidden md:flex items-center mt-0.5"><UserIcon className="w-2.5 h-2.5 mr-1 flex-shrink-0" /><span className="truncate font-medium text-gray-700 dark:text-dark-text">{listing.sellerName}</span></div>
+            {listing.sellerCompanyName ? (
+                <div className="hidden md:flex flex-col mt-0.5">
+                    <div className="flex items-center"><UserIcon className="w-2.5 h-2.5 mr-1 flex-shrink-0" /><span className="truncate font-medium text-gray-700 dark:text-dark-text">{listing.sellerCompanyName}</span></div>
+                    <div className="text-[10px] text-gray-500 italic mt-0.5"><span className="truncate">{listing.sellerName}</span></div>
+                </div>
+            ) : (
+                <div className="hidden md:flex items-center mt-0.5"><UserIcon className="w-2.5 h-2.5 mr-1 flex-shrink-0" /><span className="truncate font-medium text-gray-700 dark:text-dark-text">{listing.sellerName}</span></div>
+            )}
             <div className="hidden md:flex flex-wrap gap-1 mt-1">
                 <span className="bg-gray-100 dark:bg-dark-border px-1 py-0.5 rounded-[3px] font-bold text-gray-600 dark:text-dark-subtext">{mainLabel}</span>
                 <span className="bg-tumbi-50 dark:bg-tumbi-900/30 px-1 py-0.5 rounded-[3px] font-bold text-tumbi-600 dark:text-tumbi-400 truncate">{subLabel}</span>
@@ -745,7 +752,16 @@ export const MessagesView = ({ user, onOpenChat, onUnreadCountChange }: { user: 
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-baseline">
                                         <div className="flex items-center space-x-2">
-                                            <h3 className="font-bold text-sm truncate pr-2 dark:text-dark-text">{session.otherUserName}</h3>
+                                            <div className="min-w-0">
+                                                {session.otherUserCompanyName ? (
+                                                    <>
+                                                        <h3 className="font-bold text-sm truncate pr-2 dark:text-dark-text">{session.otherUserCompanyName}</h3>
+                                                        <div className="text-[11px] text-gray-500 truncate">{session.otherUserName}</div>
+                                                    </>
+                                                ) : (
+                                                    <h3 className="font-bold text-sm truncate pr-2 dark:text-dark-text">{session.otherUserName}</h3>
+                                                )}
+                                            </div>
                                         </div>
                                         <span className="text-[10px] text-gray-400">{session.lastMessageDate ? new Date(session.lastMessageDate).toLocaleDateString() : ''}</span>
                                     </div>
@@ -973,7 +989,19 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
                          <button onClick={onBack} className="p-2 mr-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeftIcon className="w-5 h-5 text-gray-900 dark:text-dark-text" /></button>
                         <div className="flex items-center space-x-3">
                             <Avatar src={session.otherUserImage} name={session.otherUserName} size="sm" />
-                            <div className="overflow-hidden"><h2 className="font-bold text-gray-900 dark:text-dark-text leading-tight truncate">{session.otherUserName}</h2><p className="text-xs text-gray-500 truncate w-40">{session.listingTitle}</p></div>
+                            <div className="overflow-hidden">
+                                {session.otherUserCompanyName ? (
+                                    <>
+                                        <h2 className="font-bold text-gray-900 dark:text-dark-text leading-tight truncate">{session.otherUserCompanyName}</h2>
+                                        <div className="text-xs text-gray-500 truncate w-40">{session.otherUserName}</div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <h2 className="font-bold text-gray-900 dark:text-dark-text leading-tight truncate">{session.otherUserName}</h2>
+                                        <p className="text-xs text-gray-500 truncate w-40">{session.listingTitle}</p>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div ref={scrollRef} className="flex-1 bg-gray-50 dark:bg-dark-bg p-4 space-y-4 overflow-y-auto">
@@ -1005,7 +1033,19 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false }
                  <button onClick={onBack} className={`p-2 mr-2 hover:bg-gray-100 rounded-full transition-colors ${embedded ? 'md:hidden' : ''}`}><ChevronLeftIcon className="w-5 h-5 text-gray-900 dark:text-dark-text" /></button>
                 <div className="flex items-center space-x-3">
                     <Avatar src={session.otherUserImage} name={session.otherUserName} size="sm" />
-                    <div className="overflow-hidden"><h2 className="font-bold text-gray-900 dark:text-dark-text leading-tight truncate">{session.otherUserName}</h2><p className="text-xs text-gray-500 truncate w-40">{session.listingTitle}</p></div>
+                    <div className="overflow-hidden">
+                        {session.otherUserCompanyName ? (
+                            <>
+                                <h2 className="font-bold text-gray-900 dark:text-dark-text leading-tight truncate">{session.otherUserCompanyName}</h2>
+                                <div className="text-xs text-gray-500 truncate w-40">{session.otherUserName}</div>
+                            </>
+                        ) : (
+                            <>
+                                <h2 className="font-bold text-gray-900 dark:text-dark-text leading-tight truncate">{session.otherUserName}</h2>
+                                <p className="text-xs text-gray-500 truncate w-40">{session.listingTitle}</p>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
             <div ref={scrollRef} className="flex-1 bg-gray-50 dark:bg-dark-bg p-4 space-y-4 overflow-y-auto">
@@ -1140,7 +1180,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                                 <Avatar src={listing.sellerImage} name={listing.sellerName} size="md" />
                                 <div className="flex-1">
                                     <div className="flex items-center space-x-1.5">
-                                        <p className="font-bold text-gray-900 dark:text-dark-text">{listing.sellerName}</p>
+                                        <p className="font-bold text-gray-900 dark:text-dark-text">{listing.sellerCompanyName || listing.sellerName}</p>
                                         {listing.isVerified && (
                                             <div className="flex items-center text-blue-500">
                                                 <span className="hidden md:inline text-[10px] font-bold mr-1 uppercase">Verified</span>
@@ -1148,6 +1188,7 @@ export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdi
                                             </div>
                                         )}
                                     </div>
+                                    {listing.sellerCompanyName ? <p className="text-[11px] text-gray-500 italic">{listing.sellerName}</p> : null}
                                     <p className="text-xs text-tumbi-600 font-medium flex items-center">View Store <ChevronRightIcon className="w-3 h-3 ml-1" /></p>
                                 </div>
                             </div>
