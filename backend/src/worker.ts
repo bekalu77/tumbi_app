@@ -165,8 +165,10 @@ app.use('/api/*', async (c, next) => {
         
         c.set('user', { ...userData, id: String(userData.id), isAdmin });
         return await next();
-    } catch (err) {
-        return c.json({ message: 'Invalid session' }, 401);
+    } catch (err: any) {
+        console.error('Auth verify error:', err && err.message ? err.message : err);
+        const message = err && err.message ? `Invalid session: ${err.message}` : 'Invalid session';
+        return c.json({ message }, 401);
     }
 });
 
