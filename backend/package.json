@@ -10,10 +10,10 @@
     "dev": "wrangler dev --remote --ip 127.0.0.1 --port 8787"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^0.9.1",
+    "@neondatabase/serverless": "^0.9.5",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
-    "hono": "^4.2.8",
+    "hono": "^4.11.4",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3"
   },
