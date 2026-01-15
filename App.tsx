@@ -46,6 +46,7 @@ export default function App() {
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
   const [editingListing, setEditingListing] = useState<Listing | undefined>(undefined);
+  const [isSavingListing, setIsSavingListing] = useState(false);
   const [savedListingIds, setSavedListingIds] = useState<Set<string>>(new Set());
 
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
@@ -251,11 +252,20 @@ export default function App() {
 
   const handleSaveListing = async (data: any, imageUrls: string[]) => {
     const token = localStorage.getItem('token');
+    if (!token) { setShowAuth(true); return; }
     const isEditing = !!editingListing;
+    setIsSavingListing(true);
     try {
-        const listingRes = await fetch(`${API_URL}/api/listings${isEditing ? `/${editingListing.id}` : ''}`, { method: isEditing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token || '' }, body: JSON.stringify({ ...data, imageUrls }) });
-        if (listingRes.ok) { handleRefresh(); setViewState('home'); setEditingListing(undefined); }
+        const listingRes = await fetch(`${API_URL}/api/listings${isEditing ? `/${editingListing?.id}` : ''}`, { method: isEditing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token || '' }, body: JSON.stringify({ ...data, imageUrls }) });
+        if (listingRes.ok) {
+            handleRefresh(); setViewState('home'); setEditingListing(undefined);
+        } else {
+            let errText = 'Failed to save listing';
+            try { const errData = await listingRes.json(); errText = errData.message || errText; } catch (e) {}
+            alert(errText);
+        }
     } catch (error: any) { alert(`Error: ${error.message}`); }
+    finally { setIsSavingListing(false); }
   };
 
   const toggleSave = async (id: string) => {
@@ -318,7 +328,7 @@ export default function App() {
         }} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} />}
         
         {viewState === 'vendor-profile' && selectedVendorId && <VendorProfileView vendorId={selectedVendorId} listings={listings} onBack={() => setViewState('details')} onOpenListing={openListing} />}
-        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={false} />}
+        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isSavingListing} />}
         
         <header className="sticky top-0 z-30 bg-tumbi-500 dark:bg-dark-card shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-3">
