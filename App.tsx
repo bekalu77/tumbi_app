@@ -258,11 +258,19 @@ export default function App() {
     try {
         const listingRes = await fetch(`${API_URL}/api/listings${isEditing ? `/${editingListing?.id}` : ''}`, { method: isEditing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', 'x-access-token': token || '' }, body: JSON.stringify({ ...data, imageUrls }) });
         if (listingRes.ok) {
-            handleRefresh(); setViewState('home'); setEditingListing(undefined);
+          handleRefresh(); setViewState('home'); setEditingListing(undefined);
         } else {
-            let errText = 'Failed to save listing';
-            try { const errData = await listingRes.json(); errText = errData.message || errText; } catch (e) {}
-            alert(errText);
+          if (listingRes.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+            setShowAuth(true);
+            alert('Session expired — please log in again.');
+            return;
+          }
+          let errText = 'Failed to save listing';
+          try { const errData = await listingRes.json(); errText = errData.message || errText; } catch (e) {}
+          alert(errText);
         }
     } catch (error: any) { alert(`Error: ${error.message}`); }
     finally { setIsSavingListing(false); }
