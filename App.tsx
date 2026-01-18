@@ -11,6 +11,8 @@ const isLocal = window.location.hostname === 'localhost' || window.location.host
 const DEFAULT_API_URL = isLocal ? "http://localhost:8787" : "https://tumbi-backend.bekalu77.workers.dev";
 const API_URL = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
 
+console.log(`[APP] API URL: ${API_URL}`);
+
 const PAGE_SIZE = 12;
 
 export default function App() {
@@ -141,7 +143,6 @@ export default function App() {
       setIsOffline(false);
     } catch (e) {
       console.error("Listing Fetch Failed:", e);
-      // We no longer set isOffline here to avoid the maintenance screen loop
     } finally {
       setIsListingsLoading(false);
       setIsLoadingMore(false);
@@ -193,7 +194,6 @@ export default function App() {
 
   useEffect(() => {
     if (user) { 
-        // Fetch saved and unread count in background
         const token = localStorage.getItem('token');
         if (token) {
             fetch(`${API_URL}/api/saved`, { headers: { 'x-access-token': token } })
@@ -245,7 +245,23 @@ export default function App() {
     const token = localStorage.getItem('token');
     const photoFormData = new FormData();
     photos.forEach((photo) => photoFormData.append('photos', photo));
-    const uploadRes = await fetch(`${API_URL}/api/upload`, { method: 'POST', headers: { 'x-access-token': token || '' }, body: photoFormData });
+    
+    const uploadRes = await fetch(`${API_URL}/api/upload`, { 
+        method: 'POST', 
+        headers: { 'x-access-token': token || '' }, 
+        body: photoFormData 
+    });
+
+    if (!uploadRes.ok) {
+        if (uploadRes.status === 401) {
+            handleLogout();
+            setShowAuth(true);
+            throw new Error('Session expired — please log in again.');
+        }
+        const errorData = await uploadRes.json();
+        throw new Error(errorData.message || 'Failed to upload photos');
+    }
+
     const uploadData = await uploadRes.json();
     return uploadData.urls;
   };
@@ -261,9 +277,7 @@ export default function App() {
           handleRefresh(); setViewState('home'); setEditingListing(undefined);
         } else {
           if (listingRes.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setUser(null);
+            handleLogout();
             setShowAuth(true);
             alert('Session expired — please log in again.');
             return;
@@ -305,7 +319,6 @@ export default function App() {
       });
 
       if (response.ok) {
-        // Update user state
         const updatedUser = { ...user, ...data };
         setUser(updatedUser);
         localStorage.setItem('user', JSON.stringify(updatedUser));
