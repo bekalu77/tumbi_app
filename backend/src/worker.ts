@@ -129,8 +129,9 @@ app.use('/*', cors({
 }));
 
 app.onError((err, c) => {
-  console.error(`Worker Error: ${err.message}`);
-  return c.json({ message: err.message || 'Internal Server Error' }, 500);
+  console.error(`Worker Error [${c.req.method} ${c.req.path}]: ${err.message}`);
+  if (err.stack) console.error(err.stack);
+  return c.json({ message: err.message || 'Internal Server Error', debug: isLocal ? err.stack : undefined }, 500);
 });
 
 // Auth Middleware
@@ -156,7 +157,6 @@ app.use('/api/*', async (c, next) => {
 
     let decoded: any;
     try {
-        // Explicitly specify HS256 to fix the "alg option required" error
         decoded = await verify(authHeader, c.env.JWT_SECRET, 'HS256');
     } catch (err: any) {
         console.error(`[AUTH FAIL] JWT Verify error:`, err.message);
@@ -279,53 +279,58 @@ app.post('/api/login', async (c) => {
 
 // --- LISTINGS ---
 app.get('/api/listings', async (c) => {
-    const sql = neon(c.env.DATABASE_URL);
-    const limit = parseInt(c.req.query('limit') || '20');
-    const offset = parseInt(c.req.query('offset') || '0');
-    const mainCategory = c.req.query('mainCategory');
-    const subCategory = c.req.query('subCategory');
-    const city = c.req.query('city');
-    const search = c.req.query('search');
-    const sortBy = c.req.query('sortBy') || 'date-desc';
-    const userId = c.req.query('userId');
+    try {
+        const sql = neon(c.env.DATABASE_URL);
+        const limit = parseInt(c.req.query('limit') || '20');
+        const offset = parseInt(c.req.query('offset') || '0');
+        const mainCategory = c.req.query('mainCategory');
+        const subCategory = c.req.query('subCategory');
+        const city = c.req.query('city');
+        const search = c.req.query('search');
+        const sortBy = c.req.query('sortBy') || 'date-desc';
+        const userId = c.req.query('userId');
 
-    let query = `
-        SELECT l.*, u.name as "sellerName", u.phone as "sellerPhone", u.profile_image as "sellerImage", u.company_name as "sellerCompanyName", u.is_verified as "isVerified"
-        FROM listings l 
-        LEFT JOIN users u ON l.user_id = u.id 
-        WHERE l.status = 'active'
-    `;
-    const params: any[] = [];
-    if (mainCategory && mainCategory !== 'all') { params.push(mainCategory); query += ` AND l.main_category = $${params.length}`; }
-    if (subCategory && subCategory !== 'all') { params.push(subCategory); query += ` AND l.sub_category = $${params.length}`; }
-    if (city && city !== 'All Cities') { params.push(city); query += ` AND l.location = $${params.length}`; }
-    if (search) { params.push(`%${search.toLowerCase()}%`); query += ` AND (LOWER(l.title) LIKE $${params.length} OR LOWER(l.description) LIKE $${params.length})`; }
-    if (userId) { params.push(userId); query += ` AND l.user_id = $${params.length}`; }
+        let query = `
+            SELECT l.*, u.name as "sellerName", u.phone as "sellerPhone", u.profile_image as "sellerImage", u.company_name as "sellerCompanyName", u.is_verified as "isVerified"
+            FROM listings l 
+            LEFT JOIN users u ON l.user_id = u.id 
+            WHERE l.status = 'active'
+        `;
+        const params: any[] = [];
+        if (mainCategory && mainCategory !== 'all') { params.push(mainCategory); query += ` AND l.main_category = $${params.length}`; }
+        if (subCategory && subCategory !== 'all') { params.push(subCategory); query += ` AND l.sub_category = $${params.length}`; }
+        if (city && city !== 'All Cities') { params.push(city); query += ` AND l.location = $${params.length}`; }
+        if (search) { params.push(`%${search.toLowerCase()}%`); query += ` AND (LOWER(l.title) LIKE $${params.length} OR LOWER(l.description) LIKE $${params.length})`; }
+        if (userId) { params.push(userId); query += ` AND l.user_id = $${params.length}`; }
 
-    let orderClause = ` ORDER BY u.is_verified DESC`;
-    if (sortBy === 'price-asc') orderClause += `, l.price ASC`;
-    else if (sortBy === 'price-desc') orderClause += `, l.price DESC`;
-    else if (sortBy === 'date-asc') orderClause += `, l.id ASC`; 
-    else orderClause += `, l.id DESC`; 
+        let orderClause = ` ORDER BY u.is_verified DESC`;
+        if (sortBy === 'price-asc') orderClause += `, l.price ASC`;
+        else if (sortBy === 'price-desc') orderClause += `, l.price DESC`;
+        else if (sortBy === 'date-asc') orderClause += `, l.id ASC`; 
+        else orderClause += `, l.id DESC`; 
 
-    query += orderClause;
-    
-    if (!userId) {
-        params.push(limit); query += ` LIMIT $${params.length}`;
-        params.push(offset); query += ` OFFSET $${params.length}`;
+        query += orderClause;
+        
+        if (!userId) {
+            params.push(limit); query += ` LIMIT $${params.length}`;
+            params.push(offset); query += ` OFFSET $${params.length}`;
+        }
+
+        const rows = await sql(query, params);
+        return c.json(rows.map(r => ({ 
+            ...r, 
+            id: String(r.id), 
+            price: parseFloat(r.price), 
+            imageUrls: r.image_url ? String(r.image_url).split(',') : [], 
+            sellerId: String(r.user_id),
+            sellerImage: r.sellerImage,
+            sellerCompanyName: r.sellerCompanyName,
+            isVerified: r.isVerified
+        })));
+    } catch (err: any) {
+        console.error("Listings Fetch Error:", err.message);
+        throw err; // Caught by onError
     }
-
-    const rows = await sql(query, params);
-    return c.json(rows.map(r => ({ 
-        ...r, 
-        id: String(r.id), 
-        price: parseFloat(r.price), 
-        imageUrls: r.image_url ? r.image_url.split(',') : [], 
-        sellerId: String(r.user_id),
-        sellerImage: r.sellerImage,
-        sellerCompanyName: r.sellerCompanyName,
-        isVerified: r.isVerified
-    })));
 });
 
 app.get('/api/listings/:id', async (c) => {
@@ -361,7 +366,7 @@ app.get('/api/listings/:id', async (c) => {
         ...r, 
         id: String(r.id), 
         price: parseFloat(r.price), 
-        imageUrls: r.image_url ? r.image_url.split(',') : [], 
+        imageUrls: r.image_url ? String(r.image_url).split(',') : [], 
         sellerId: String(r.user_id),
         sellerImage: r.sellerImage,
         sellerCompanyName: r.sellerCompanyName,
@@ -715,6 +720,8 @@ app.post('/api/admin/post-all-listings', async (c) => {
 });
 
 export default app;
+
+const isLocal = true; // Temporary flag for local dev check in onError
 
 // --- SCHEDULED BACKUP ---
 export async function scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
