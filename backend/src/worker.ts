@@ -120,7 +120,7 @@ function generateShareSlug(title: string, id: number): string {
 
 // --- MIDDLEWARE ---
 app.use('/*', cors({
-  origin: (origin) => origin, // Allow any origin that requests
+  origin: (origin) => origin,
   allowHeaders: ['Content-Type', 'x-access-token', 'Authorization', 'x-requested-with'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['Content-Length', 'X-Kuma-Revision'],
@@ -137,12 +137,11 @@ app.onError((err, c) => {
 app.use('/api/*', async (c, next) => {
     const path = c.req.path;
     const method = c.req.method;
-
+    
     const isPublic = 
         (path === '/api/register' && method === 'POST') ||
         (path === '/api/login' && method === 'POST') ||
         (path === '/api/listings' && method === 'GET') ||
-        (path === '/api/upload' && method === 'POST') || 
         (path.match(/^\/api\/listings\/\d+$/) && method === 'GET') ||
         (path.match(/^\/api\/share\/[a-z0-9-]+$/) && method === 'GET') || 
         method === 'OPTIONS';
@@ -150,13 +149,34 @@ app.use('/api/*', async (c, next) => {
     if (isPublic) return await next();
 
     const authHeader = c.req.header('x-access-token');
-    if (!authHeader) return c.json({ message: 'No token provided' }, 401);
+    if (!authHeader) {
+        console.log(`[AUTH FAIL] No token for ${method} ${path}`);
+        return c.json({ message: 'No token provided' }, 401);
+    }
+
+    let decoded: any;
+    try {
+        // Explicitly specify HS256 to fix the "alg option required" error
+        decoded = await verify(authHeader, c.env.JWT_SECRET, 'HS256');
+    } catch (err: any) {
+        console.error(`[AUTH FAIL] JWT Verify error:`, err.message);
+        return c.json({ message: `Invalid session: ${err.message}` }, 401);
+    }
 
     try {
-        const decoded = await verify(authHeader, c.env.JWT_SECRET);
         const sql = neon(c.env.DATABASE_URL);
-        const users = await sql`SELECT id, name, email, phone, location, company_name as "companyName", profile_image as "profileImage", is_verified as "isVerified", is_admin as "isAdmin" FROM users WHERE id = ${parseInt(decoded.id as string)}`;
-        if (!users.length) return c.json({ message: 'User not found' }, 401);
+        const userId = parseInt(String(decoded.id));
+        
+        if (isNaN(userId)) {
+            return c.json({ message: 'Invalid session data' }, 401);
+        }
+
+        const users = await sql`SELECT id, name, email, phone, location, company_name as "companyName", profile_image as "profileImage", is_verified as "isVerified", is_admin as "isAdmin" FROM users WHERE id = ${userId}`;
+        
+        if (!users.length) {
+            console.log(`[AUTH FAIL] User ${decoded.id} not found in DB`);
+            return c.json({ message: 'User account no longer exists' }, 401);
+        }
         
         const userData = users[0];
         const adminPhones = [c.env.ADMIN_PHONE, '0912886217', '+251912886217'];
@@ -166,9 +186,8 @@ app.use('/api/*', async (c, next) => {
         c.set('user', { ...userData, id: String(userData.id), isAdmin });
         return await next();
     } catch (err: any) {
-        console.error('Auth verify error:', err && err.message ? err.message : err);
-        const message = err && err.message ? `Invalid session: ${err.message}` : 'Invalid session';
-        return c.json({ message }, 401);
+        console.error(`[DB ERROR] Auth middleware database error:`, err.message);
+        return c.json({ message: 'Server connection error. Please try again.' }, 500);
     }
 });
 
@@ -214,7 +233,7 @@ app.post('/api/register', async (c) => {
             RETURNING id
         `;
         
-        const token = await sign({ id: String(result[0].id) }, c.env.JWT_SECRET);
+        const token = await sign({ id: String(result[0].id) }, c.env.JWT_SECRET, 'HS256');
         return c.json({ 
             auth: true, 
             token, 
@@ -245,7 +264,7 @@ app.post('/api/login', async (c) => {
         const user = rows[0];
         if (!(await bcrypt.compare(password, user.password))) return c.json({ message: 'Incorrect password' }, 401);
         
-        const token = await sign({ id: String(user.id) }, c.env.JWT_SECRET);
+        const token = await sign({ id: String(user.id) }, c.env.JWT_SECRET, 'HS256');
         const { password: _, ...userData } = user;
         
         const adminPhones = [c.env.ADMIN_PHONE, '0912886217', '+251912886217'];
@@ -291,7 +310,6 @@ app.get('/api/listings', async (c) => {
 
     query += orderClause;
     
-    // Only apply pagination if not fetching for a specific user
     if (!userId) {
         params.push(limit); query += ` LIMIT $${params.length}`;
         params.push(offset); query += ` OFFSET $${params.length}`;
@@ -364,9 +382,11 @@ app.post('/api/listings', async (c) => {
     const { title, price, unit, location, mainCategory, subCategory, description, imageUrls, contactPhone } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     
+    const imageString = Array.isArray(imageUrls) ? imageUrls.join(',') : '';
+
     const result = await sql`
         INSERT INTO listings (title, price, unit, location, main_category, sub_category, description, image_url, user_id, contact_phone) 
-        VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageUrls.join(',')}, ${parseInt(user.id)}, ${contactPhone || null}) 
+        VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageString}, ${parseInt(user.id)}, ${contactPhone || null}) 
         RETURNING id
     `;
     
@@ -375,8 +395,7 @@ app.post('/api/listings', async (c) => {
     
     const final = await sql`UPDATE listings SET share_slug = ${shareSlug} WHERE id = ${newId} RETURNING *`;
     
-    // Post to Telegram (background task)
-    const fullListing = { ...final[0], imageUrls, price, unit, title, location, description, contact_phone: contactPhone || user.phone };
+    const fullListing = { ...final[0], imageUrls: Array.isArray(imageUrls) ? imageUrls : [], price, unit, title, location, description, contact_phone: contactPhone || user.phone };
     c.executionCtx.waitUntil(postToTelegram(fullListing, c.env));
     
     return c.json({ ...final[0], id: String(final[0].id) });
@@ -389,6 +408,7 @@ app.put('/api/listings/:id', async (c) => {
     const sql = neon(c.env.DATABASE_URL);
     
     const shareSlug = generateShareSlug(title, parseInt(id));
+    const imageString = Array.isArray(imageUrls) ? imageUrls.join(',') : '';
 
     let result;
     if (user.isAdmin) {
@@ -396,7 +416,7 @@ app.put('/api/listings/:id', async (c) => {
             UPDATE listings SET 
                 title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
                 main_category = ${mainCategory}, sub_category = ${subCategory}, 
-                description = ${description}, image_url = ${imageUrls.join(',')}, 
+                description = ${description}, image_url = ${imageString}, 
                 status = ${status || 'active'}, contact_phone = ${contactPhone || null},
                 share_slug = ${shareSlug}
             WHERE id = ${parseInt(id)}
@@ -407,7 +427,7 @@ app.put('/api/listings/:id', async (c) => {
             UPDATE listings SET 
                 title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
                 main_category = ${mainCategory}, sub_category = ${subCategory}, 
-                description = ${description}, image_url = ${imageUrls.join(',')}, 
+                description = ${description}, image_url = ${imageString}, 
                 status = ${status || 'active'}, contact_phone = ${contactPhone || null},
                 share_slug = ${shareSlug}
             WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} 
@@ -417,7 +437,6 @@ app.put('/api/listings/:id', async (c) => {
 
     if (!result.length) return c.json({ message: 'Not authorized' }, 403);
     
-    // Post to Telegram if status is active (background task)
     if (result[0].status === 'active') {
         const fullListing = { ...result[0], imageUrls: result[0].image_url ? result[0].image_url.split(',') : [], price: result[0].price, unit: result[0].unit, title: result[0].title, location: result[0].location, description: result[0].description, contact_phone: result[0].contact_phone };
         c.executionCtx.waitUntil(postToTelegram(fullListing, c.env));
@@ -516,7 +535,8 @@ app.post('/api/upload', async (c) => {
         const rawFiles = formData.getAll('photos');
         if (!rawFiles || rawFiles.length === 0) return c.json({ message: 'No files' }, 400);
         const urls: string[] = [];
-        const userId = c.get('user')?.id || 'anonymous';
+        const user = c.get('user');
+        const userId = user?.id || 'anonymous';
         const publicUrl = c.env.R2_PUBLIC_URL.endsWith('/') 
             ? c.env.R2_PUBLIC_URL.slice(0, -1) 
             : c.env.R2_PUBLIC_URL;
@@ -651,11 +671,9 @@ app.post('/api/messages', async (c) => {
             return c.json({ message: 'Invalid ID format' }, 400);
         }
 
-        // Check if conversation exists and user is part of it
         const convCheck = await sql`SELECT buyer_id, seller_id FROM conversations WHERE id = ${convId}`;
         if (!convCheck.length) return c.json({ message: 'Conversation not found' }, 404);
         if (convCheck[0].buyer_id !== senderId && convCheck[0].seller_id !== senderId) return c.json({ message: 'Unauthorized' }, 403);
-        // Check if receiver is the other participant
         if ((senderId === convCheck[0].buyer_id && recvId !== convCheck[0].seller_id) || (senderId === convCheck[0].seller_id && recvId !== convCheck[0].buyer_id)) return c.json({ message: 'Invalid receiver' }, 400);
 
         const result = await sql`
@@ -705,19 +723,10 @@ export async function scheduled(event: ScheduledEvent, env: Bindings, ctx: Execu
     try {
         const sql = neon(env.DATABASE_URL);
         
-        // Export users
         const users = await sql`SELECT id, name, company_name, email, phone, location, profile_image, is_verified, is_admin, created_at FROM users`;
-        
-        // Export listings
         const listings = await sql`SELECT id, user_id, title, description, price, unit, location, contact_phone, main_category, sub_category, image_url, status, views, share_slug, created_at FROM listings`;
-        
-        // Export conversations
         const conversations = await sql`SELECT id, listing_id, buyer_id, seller_id, created_at FROM conversations`;
-        
-        // Export messages
         const messages = await sql`SELECT id, conversation_id, sender_id, receiver_id, content, is_read, created_at FROM messages`;
-        
-        // Export saved listings
         const saved_listings = await sql`SELECT user_id, listing_id, created_at FROM saved_listings`;
         
         const backupData = {
@@ -730,7 +739,7 @@ export async function scheduled(event: ScheduledEvent, env: Bindings, ctx: Execu
         };
         
         const backupJson = JSON.stringify(backupData, null, 2);
-        const backupKey = `backup-${new Date().toISOString().split('T')[0]}.json`; // e.g., backup-2026-01-14.json
+        const backupKey = `backup-${new Date().toISOString().split('T')[0]}.json`;
         
         await env.R2_BUCKET.put(backupKey, backupJson, {
             httpMetadata: { contentType: 'application/json' }
