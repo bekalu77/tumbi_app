@@ -263,6 +263,10 @@ export default function App() {
     }
 
     const uploadData = await uploadRes.json();
+    if (!uploadData.urls || !Array.isArray(uploadData.urls)) {
+        console.error('Upload response missing urls array:', uploadData);
+        return [];
+    }
     return uploadData.urls;
   };
 
