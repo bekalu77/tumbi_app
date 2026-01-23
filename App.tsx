@@ -381,7 +381,15 @@ export default function App() {
                         <option value="date-desc">Newest</option><option value="date-asc">Oldest</option><option value="price-asc">Price: Low-High</option><option value="price-desc">Price: High-Low</option>
                     </select>
                 </div>
-                {listings.length > 0 ? (
+                {isListingsLoading ? (
+                    <div className="flex flex-col items-center justify-center py-24 text-center">
+                        <div className="w-16 h-16 bg-tumbi-50 dark:bg-tumbi-900/20 rounded-[1.5rem] flex items-center justify-center mb-6">
+                            <RefreshCwIcon className="w-8 h-8 text-tumbi-600 animate-spin" />
+                        </div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-dark-text mb-2">Finding the best deals...</h2>
+                        <p className="text-sm text-gray-500 dark:text-dark-subtext max-w-xs">Building your personalized marketplace feed. Please wait a moment.</p>
+                    </div>
+                ) : listings.length > 0 ? (
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} showActions={user?.isAdmin} onEdit={user?.isAdmin ? (l) => { setEditingListing(l); setViewState('edit'); } : undefined} onDelete={user?.isAdmin ? (id) => { fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => handleRefresh())} : undefined} />))}</div>
                 ) : (
                     <div className="flex flex-col items-center justify-center py-24 text-center"><SearchIcon className="w-10 h-10 text-gray-400 mb-6" /><p className="text-xl text-gray-600 dark:text-dark-text font-bold">No items found</p></div>
