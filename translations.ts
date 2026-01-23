@@ -108,7 +108,7 @@ export const translations = {
     updateListing: 'ማስታወቂያ ያድሱ',
     myAds: 'የእኔ ማስታወቂያዎች',
     allAds: 'ሁሉም ማስታወቂያዎች',
-    title: 'ርዕስ',
+    title: 'የዕቃዉ ወይም የአገልግሎት ሰም',
     titlePlaceholder: 'ምን እየሸጡ ነው?',
     price: 'ዋጋ',
     pricePlaceholder: 'መጠን',
