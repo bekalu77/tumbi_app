@@ -1,17 +1,16 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { CATEGORIES, SUB_CATEGORIES, ETHIOPIAN_CITIES } from './constants';
+import { getCategories, getSubCategories, getCities } from './constants';
 import { Listing, ViewState, User, ChatSession } from './types';
 import { ListingCard, AddListingForm, DetailView, SavedView, MessagesView, ProfileView, AuthModal, ChatConversationView, EditProfileModal, VendorProfileView, MaintenanceView } from './components/Components';
 import { SearchIcon, PlusIcon, HomeIcon, UserIcon, MessageCircleIcon, SaveIcon, RefreshCwIcon, TumbiLogo } from './components/Icons';
-import ThemeToggle from './components/ThemeToggle';
+import LanguageToggle from './components/LanguageToggle';
+import { translations, Language } from './translations';
 import { App as CapApp } from '@capacitor/app';
 
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 const DEFAULT_API_URL = isLocal ? "http://localhost:8787" : "https://tumbi-backend.bekalu77.workers.dev";
 const API_URL = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
-
-console.log(`[APP] API URL: ${API_URL}`);
 
 const PAGE_SIZE = 12;
 
@@ -19,7 +18,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [showAuth, setShowAuth] = useState(false);
   const [isUserLoading, setIsUserLoading] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [language, setLanguage] = useState<Language>('en');
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
 
@@ -30,17 +29,19 @@ export default function App() {
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
 
+  const t = translations[language];
+
   const [selectedMainCategory, setSelectedMainCategory] = useState('all');
   const [selectedSubCategory, setSelectedSubCategory] = useState('all');
   const [searchInput, setSearchInput] = useState('');
-  const [selectedCity, setSelectedCity] = useState('All Cities');
+  const [selectedCity, setSelectedCity] = useState(t.allCities);
   const [sortBy, setSortBy] = useState('date-desc');
   
   const [appliedFilters, setAppliedFilters] = useState({
     search: '',
     mainCategory: 'all',
     subCategory: 'all',
-    city: 'All Cities',
+    city: 'All Cities', // Always use English for API filter stability
     sortBy: 'date-desc'
   });
 
@@ -56,6 +57,10 @@ export default function App() {
 
   const loaderRef = useRef<HTMLDivElement>(null);
   const lastBackPressTime = useRef<number>(0);
+
+  const categories = useMemo(() => getCategories(language), [language]);
+  const subCategories = useMemo(() => getSubCategories(language, selectedMainCategory), [language, selectedMainCategory]);
+  const cities = useMemo(() => getCities(language), [language]);
 
   const handleIncomingUrl = useCallback((urlStr: string) => {
     try {
@@ -165,15 +170,29 @@ export default function App() {
   }, [loadMore, hasMore, isLoadingMore, isListingsLoading]);
 
   useEffect(() => {
-    setAppliedFilters({ search: searchInput, mainCategory: selectedMainCategory, subCategory: selectedSubCategory, city: selectedCity, sortBy: sortBy });
-  }, [selectedMainCategory, selectedSubCategory, selectedCity, sortBy]);
+    // Find English city name for API stability
+    let cityForApi = 'All Cities';
+    const t_en = translations['en'];
+    if (selectedCity !== t.allCities) {
+        const cityData = getCities('en').find((c, i) => getCities(language)[i] === selectedCity);
+        if (cityData) cityForApi = cityData;
+    }
+
+    setAppliedFilters({ 
+        search: searchInput, 
+        mainCategory: selectedMainCategory, 
+        subCategory: selectedSubCategory, 
+        city: cityForApi, 
+        sortBy: sortBy 
+    });
+  }, [selectedMainCategory, selectedSubCategory, selectedCity, sortBy, language]);
 
   useEffect(() => { setOffset(0); fetchListings(0, appliedFilters, true); }, [appliedFilters]);
 
   const handleApplyFilters = () => setAppliedFilters(prev => ({ ...prev, search: searchInput }));
 
   const resetAllFilters = () => {
-    setSelectedMainCategory('all'); setSelectedSubCategory('all'); setSelectedCity('All Cities'); setSearchInput(''); setSortBy('date-desc');
+    setSelectedMainCategory('all'); setSelectedSubCategory('all'); setSelectedCity(translations[language].allCities); setSearchInput(''); setSortBy('date-desc');
     setAppliedFilters({ search: '', mainCategory: 'all', subCategory: 'all', city: 'All Cities', sortBy: 'date-desc' });
     setViewState('home');
   };
@@ -184,8 +203,13 @@ export default function App() {
       const userData = localStorage.getItem('user');
       if (token && userData) { try { setUser(JSON.parse(userData)); } catch (e) { localStorage.removeItem('user'); } }
       setIsUserLoading(false);
+      
+      const savedLang = localStorage.getItem('language') as Language;
+      if (savedLang) setLanguage(savedLang);
+
+      // We still keep dark mode from system/storage but removed the toggle
       if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.classList.add('dark'); setIsDarkMode(true);
+        document.documentElement.classList.add('dark');
       }
       handleIncomingUrl(window.location.href);
     };
@@ -221,12 +245,11 @@ export default function App() {
     return () => { backButtonHandler.then(h => h.remove()); };
   }, [viewState, showAuth, showEditProfile]);
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(prev => {
-      const newIsDark = !prev;
-      if (newIsDark) { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); }
-      else { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); }
-      return newIsDark;
+  const toggleLanguage = () => {
+    setLanguage(prev => {
+      const newLang = prev === 'en' ? 'am' : 'en';
+      localStorage.setItem('language', newLang);
+      return newLang;
     });
   };
 
@@ -256,18 +279,14 @@ export default function App() {
         if (uploadRes.status === 401) {
             handleLogout();
             setShowAuth(true);
-            throw new Error('Session expired — please log in again.');
+            throw new Error(t.sessionExpired);
         }
         const errorData = await uploadRes.json();
-        throw new Error(errorData.message || 'Failed to upload photos');
+        throw new Error(errorData.message || t.failedToUpload);
     }
 
     const uploadData = await uploadRes.json();
-    if (!uploadData.urls || !Array.isArray(uploadData.urls)) {
-        console.error('Upload response missing urls array:', uploadData);
-        return [];
-    }
-    return uploadData.urls;
+    return uploadData.urls || [];
   };
 
   const handleSaveListing = async (data: any, imageUrls: string[]) => {
@@ -283,14 +302,14 @@ export default function App() {
           if (listingRes.status === 401) {
             handleLogout();
             setShowAuth(true);
-            alert('Session expired — please log in again.');
+            alert(t.sessionExpired);
             return;
           }
-          let errText = 'Failed to save listing';
+          let errText = t.failedToSave;
           try { const errData = await listingRes.json(); errText = errData.message || errText; } catch (e) {}
           alert(errText);
         }
-    } catch (error: any) { alert(`Error: ${error.message}`); }
+    } catch (error: any) { alert(`${t.error}: ${error.message}`); }
     finally { setIsSavingListing(false); }
   };
 
@@ -329,19 +348,19 @@ export default function App() {
         setShowEditProfile(false);
       } else {
         const error = await response.json();
-        alert(error.message || 'Failed to update profile');
+        alert(error.message || t.failedToUpdateProfile);
       }
     } catch (error) {
       console.error('Profile update error:', error);
-      alert('Failed to update profile');
+      alert(t.failedToUpdateProfile);
     }
   };
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-dark-bg pb-24 transition-colors duration-300`}>
-        {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} />}
-        {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleSaveProfile} />}
-        {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} />}
+        {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuthSuccess={handleAuthSuccess} language={language} />}
+        {showEditProfile && user && <EditProfileModal user={user} onClose={() => setShowEditProfile(false)} onSave={handleSaveProfile} language={language} />}
+        {viewState === 'chat-conversation' && activeChat && user && <ChatConversationView session={activeChat} user={user} onBack={() => setViewState('messages')} language={language} />}
         {viewState === 'details' && selectedListingId && <DetailView listing={listings.find(l => String(l.id) === String(selectedListingId)) || null} onBack={closeListing} isSaved={savedListingIds.has(selectedListingId)} onToggleSave={toggleSave} user={user} onEdit={(l) => { setEditingListing(l); setViewState('edit'); }} onChat={(l) => {
              const token = localStorage.getItem('token');
              if(!user || !token) { setShowAuth(true); return; }
@@ -350,25 +369,25 @@ export default function App() {
                     setActiveChat({ conversationId: String(d.id), listingId: String(l.id), listingTitle: l.title, listingImage: l.imageUrls[0], otherUserId: String(l.sellerId), otherUserName: l.sellerName, otherUserImage: l.sellerImage, lastMessage: '', lastMessageDate: new Date() });
                     setViewState('chat-conversation');
                 });
-        }} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} />}
+        }} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} language={language} />}
         
-        {viewState === 'vendor-profile' && selectedVendorId && <VendorProfileView vendorId={selectedVendorId} listings={listings} onBack={() => setViewState('details')} onOpenListing={openListing} />}
-        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isSavingListing} />}
+        {viewState === 'vendor-profile' && selectedVendorId && <VendorProfileView vendorId={selectedVendorId} listings={listings} onBack={() => setViewState('details')} onOpenListing={openListing} language={language} />}
+        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isSavingListing} language={language} />}
         
         <header className="sticky top-0 z-30 bg-tumbi-500 dark:bg-dark-card shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-3">
                 <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={resetAllFilters}><TumbiLogo className="w-8 h-8" color="white" /><h1 className="text-xl font-bold tracking-tight uppercase">TUMBI</h1></div>
-                    <ThemeToggle isDark={isDarkMode} toggle={toggleDarkMode} />
+                    <div className="flex items-center space-x-2 text-white cursor-pointer" onClick={resetAllFilters}><TumbiLogo className="w-8 h-8" color="white" /><h1 className="text-xl font-bold tracking-tight uppercase">{t.appName}</h1></div>
+                    <LanguageToggle language={language} toggle={toggleLanguage} />
                 </div>
                 <div className="relative w-full mb-3">
-                    <input type="text" placeholder="I am looking for..." className="w-full h-10 pl-4 pr-10 rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text outline-none focus:ring-2 focus:ring-tumbi-700 shadow-sm text-sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()} />
+                    <input type="text" placeholder={t.searchPlaceholder} className="w-full h-10 pl-4 pr-10 rounded-lg bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text outline-none focus:ring-2 focus:ring-tumbi-700 shadow-sm text-sm" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()} />
                     <button onClick={handleApplyFilters} className="absolute right-0 top-0 h-10 px-3 text-gray-400 dark:text-dark-subtext"><SearchIcon className="w-5 h-5" /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}><option>All Cities</option>{ETHIOPIAN_CITIES.map(city => <option key={city} value={city}>{city}</option>)}</select>
-                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>{CATEGORIES.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}</select>
-                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-500 appearance-none cursor-pointer" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}><option value="all">Sub-Categories</option>{selectedMainCategory !== 'all' && SUB_CATEGORIES[selectedMainCategory]?.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}</select>
+                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedCity} onChange={e => setSelectedCity(e.target.value)}><option>{t.allCities}</option>{cities.map(city => <option key={city} value={city}>{city}</option>)}</select>
+                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-700 appearance-none cursor-pointer" value={selectedMainCategory} onChange={e => { setSelectedMainCategory(e.target.value); setSelectedSubCategory('all'); }}>{categories.map(cat => (<option key={cat.slug} value={cat.slug}>{cat.name}</option>))}</select>
+                    <select className="h-10 px-2 rounded-lg bg-white dark:bg-dark-bg text-gray-800 dark:text-dark-text text-[11px] font-medium outline-none border-none shadow-sm focus:ring-2 focus:ring-tumbi-500 appearance-none cursor-pointer" value={selectedSubCategory} onChange={e => setSelectedSubCategory(e.target.value)}><option value="all">{t.subCategories}</option>{subCategories.map(sub => (<option key={sub.value} value={sub.value}>{sub.label}</option>))}</select>
                 </div>
             </div>
         </header>
@@ -378,7 +397,7 @@ export default function App() {
                 <>
                 <div className="mb-6 flex justify-end">
                     <select className="bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg px-3 h-10 shadow-sm text-xs font-bold dark:text-dark-text outline-none cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                        <option value="date-desc">Newest</option><option value="date-asc">Oldest</option><option value="price-asc">Price: Low-High</option><option value="price-desc">Price: High-Low</option>
+                        <option value="date-desc">{t.newest}</option><option value="date-asc">{t.oldest}</option><option value="price-asc">{t.priceLowHigh}</option><option value="price-desc">{t.priceHighLow}</option>
                     </select>
                 </div>
                 {isListingsLoading ? (
@@ -386,20 +405,20 @@ export default function App() {
                         <div className="w-16 h-16 bg-tumbi-50 dark:bg-tumbi-900/20 rounded-[1.5rem] flex items-center justify-center mb-6">
                             <RefreshCwIcon className="w-8 h-8 text-tumbi-600 animate-spin" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-dark-text mb-2">Finding the best deals...</h2>
-                        <p className="text-sm text-gray-500 dark:text-dark-subtext max-w-xs">Building your personalized marketplace feed. Please wait a moment.</p>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-dark-text mb-2">{t.findingDeals}</h2>
+                        <p className="text-sm text-gray-500 dark:text-dark-subtext max-w-xs">{t.marketplaceFeed}</p>
                     </div>
                 ) : listings.length > 0 ? (
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} showActions={user?.isAdmin} onEdit={user?.isAdmin ? (l) => { setEditingListing(l); setViewState('edit'); } : undefined} onDelete={user?.isAdmin ? (id) => { fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => handleRefresh())} : undefined} />))}</div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">{listings.map(item => (<ListingCard key={item.id} listing={item} isSaved={savedListingIds.has(String(item.id))} onToggleSave={(e) => { e.stopPropagation(); toggleSave(String(item.id)); }} onClick={() => openListing(String(item.id))} showActions={user?.isAdmin} onEdit={user?.isAdmin ? (l) => { setEditingListing(l); setViewState('edit'); } : undefined} onDelete={user?.isAdmin ? (id) => { fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => handleRefresh())} : undefined} language={language} />))}</div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-24 text-center"><SearchIcon className="w-10 h-10 text-gray-400 mb-6" /><p className="text-xl text-gray-600 dark:text-dark-text font-bold">No items found</p></div>
+                    <div className="flex flex-col items-center justify-center py-24 text-center"><SearchIcon className="w-10 h-10 text-gray-400 mb-6" /><p className="text-xl text-gray-600 dark:text-dark-text font-bold">{t.noItemsFound}</p></div>
                 )}
                 <div ref={loaderRef} className="h-20 flex items-center justify-center mt-4">{isLoadingMore && <RefreshCwIcon className="w-6 h-6 text-tumbi-600 animate-spin" />}</div>
                 </>
             )}
-            {viewState === 'saved' && user && <SavedView listings={listings} savedIds={savedListingIds} onOpen={openListing} onToggleSave={toggleSave} />}
-            {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} onUnreadCountChange={setTotalUnreadMessages} />}
-            {viewState === 'profile' && user && <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onEditListing={(l) => { setEditingListing(l); setViewState('edit'); }} onDeleteListing={(id) => { fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => handleRefresh())}} onEditProfile={() => setShowEditProfile(true)} />}
+            {viewState === 'saved' && user && <SavedView listings={listings} savedIds={savedListingIds} onOpen={openListing} onToggleSave={toggleSave} language={language} />}
+            {viewState === 'messages' && user && <MessagesView user={user} onOpenChat={(session) => { setActiveChat(session); setViewState('chat-conversation'); }} onUnreadCountChange={setTotalUnreadMessages} language={language} />}
+            {viewState === 'profile' && user && <ProfileView user={user} listings={listings} onLogout={handleLogout} onOpenListing={openListing} onEditListing={(l) => { setEditingListing(l); setViewState('edit'); }} onDeleteListing={(id) => { fetch(`${API_URL}/api/listings/${id}`, { method: 'DELETE', headers: { 'x-access-token': localStorage.getItem('token') || '' }}).then(() => handleRefresh())}} onEditProfile={() => setShowEditProfile(true)} language={language} />}
         </main>
 
         <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-card border-t border-gray-200 dark:border-dark-border z-30 pb-safe shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
