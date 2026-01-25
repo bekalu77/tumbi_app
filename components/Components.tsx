@@ -296,7 +296,7 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
         <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-dark-border relative">
             <img src={firstImage} alt={listing.title} className="w-full h-full object-cover" loading="lazy" />
             {listing.isVerified && <div className="absolute top-1 right-1 flex items-center px-1 py-0.5 bg-white/90 dark:bg-dark-card/90 rounded-full text-blue-500 shadow-sm z-10"><VerifiedIcon className="w-3 h-3" /></div>}
-            {listing.isVerified && <div className="absolute bottom-1 right-1 flex items-center space-x-1 px-1 py-0.5 rounded bg-black/40 backdrop-blur-sm text-white text-[8px] font-bold z-10"><EyeIcon className="w-2.5 h-2.5" /><span>{formatViews(listing.views)}</span></div>}
+            {listing.views !== undefined && <div className="absolute bottom-1 right-1 flex items-center space-x-1 px-1 py-0.5 rounded bg-black/40 backdrop-blur-sm text-white text-[8px] font-bold z-10"><EyeIcon className="w-2.5 h-2.5" /><span>{formatViews(listing.views)}</span></div>}
             {onToggleSave && !showActions && (
                 <button onClick={onToggleSave} className="absolute top-1 left-1 p-1 rounded-full bg-white/80 dark:bg-dark-card/80 hover:bg-white dark:hover:bg-dark-card transition-colors z-10 shadow-sm">
                     <BookmarkIcon className={`w-3.5 h-3.5 ${isSaved ? 'text-tumbi-600 fill-current' : 'text-gray-400 dark:text-dark-subtext'}`} filled={isSaved} />
@@ -314,7 +314,7 @@ export const ListingCard = memo(({ listing, onClick, isSaved = false, onToggleSa
           <p className="text-sm font-black text-tumbi-600 dark:text-tumbi-400 mt-0.5">ETB {listing.price.toLocaleString()} <span className="text-[10px] font-normal text-gray-500 dark:text-dark-subtext">/{getUnitDisplay(listing.unit, language)}</span></p>
           <div className="text-[9px] text-gray-500 dark:text-dark-subtext mt-1 space-y-0.5">
             <div className="flex items-center"><MapPinIcon className="w-2.5 h-2.5 mr-1 flex-shrink-0" /><span className="truncate">{listing.location}</span></div>
-            <div className="hidden md:flex flex-wrap gap-1 mt-1">
+            <div className="flex flex-wrap gap-1 mt-1">
                 <span className="bg-gray-100 dark:bg-dark-border px-1 py-0.5 rounded-[3px] font-bold text-gray-600 dark:text-dark-subtext">{mainLabel}</span>
                 <span className="bg-tumbi-50 dark:bg-tumbi-900/30 px-1 py-0.5 rounded-[3px] font-bold text-tumbi-600 dark:text-tumbi-400 truncate">{subLabel}</span>
             </div>
@@ -334,10 +334,10 @@ export const RecommendedCard: React.FC<{category: any, onClick: () => void}> = (
 );
 
 // --- Add/Edit Listing Form ---
-interface AddListingProps { onClose: () => void; onSubmit: (listingData: any, imageUrls: string[]) => void; onUploadPhotos: (photos: File[]) => Promise<string[]>; initialData?: Listing; isSubmitting?: boolean; language: Language; }
-export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData, isSubmitting = false, language }: AddListingProps) => {
+interface AddListingProps { onClose: () => void; onSubmit: (listingData: any, imageUrls: string[]) => void; onUploadPhotos: (photos: File[]) => Promise<string[]>; initialData?: Listing; userPhone?: string; isSubmitting?: boolean; language: Language; }
+export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData, userPhone, isSubmitting = false, language }: AddListingProps) => {
     const t = translations[language];
-    const [formData, setFormData] = useState({ title: '', price: '', unit: 'pcs', location: getCities(language)[0], mainCategory: '', subCategory: '', description: '' });
+    const [formData, setFormData] = useState({ title: '', price: '', unit: 'pcs', location: getCities(language)[0], mainCategory: '', subCategory: '', description: '', contactPhone: '' });
     const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
     const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
     const [isUploading, setIsUploading] = useState(false);
@@ -347,10 +347,21 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
 
     useEffect(() => {
         if (initialData) {
-            setFormData({ title: initialData.title, price: initialData.price.toString(), unit: initialData.unit, location: initialData.location, mainCategory: initialData.mainCategory, subCategory: initialData.subCategory, description: initialData.description });
+            setFormData({ 
+                title: initialData.title, 
+                price: initialData.price.toString(), 
+                unit: initialData.unit, 
+                location: initialData.location, 
+                mainCategory: initialData.mainCategory, 
+                subCategory: initialData.subCategory, 
+                description: initialData.description,
+                contactPhone: initialData.contact_phone || initialData.sellerPhone || ''
+            });
             if (Array.isArray(initialData.imageUrls)) { setPhotoPreviews(initialData.imageUrls); setUploadedUrls(initialData.imageUrls); }
+        } else if (userPhone) {
+            setFormData(prev => ({ ...prev, contactPhone: userPhone }));
         }
-    }, [initialData]);
+    }, [initialData, userPhone]);
 
     const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
@@ -365,7 +376,7 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
             setPhotoPreviews(prev => [...prev, ...newPreviews]);
             const urls = await onUploadPhotos(optimizedFiles);
             setUploadedUrls(prev => [...prev, ...urls]);
-        } catch (err) { console.error('Upload error', err); } finally { setIsUploading(true); setIsUploading(false); }
+        } catch (err) { console.error('Upload error', err); } finally { setIsUploading(false); }
     };
 
     const removePhoto = (idx: number) => {
@@ -379,7 +390,8 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (uploadedUrls.length === 0) { alert('Please add at least one photo.'); return; }
-        onSubmit({ ...formData, price: Number(formData.price) }, uploadedUrls);
+        // Explicitly map contactPhone back to contact_phone for the backend
+        onSubmit({ ...formData, price: Number(formData.price), contact_phone: formData.contactPhone }, uploadedUrls);
     };
 
     return (
@@ -395,15 +407,22 @@ export const AddListingForm = ({ onClose, onSubmit, onUploadPhotos, initialData,
                             <input required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} /></div>
                     )}
                     {step === 1 && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t.price}</label><input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} /></div>
-                            <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t.unit}</label><select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>{getMeasurementUnits(language).map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}</select></div>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t.price}</label><input required type="number" className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} /></div>
+                                <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t.unit}</label><select className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})}>{getMeasurementUnits(language).map(u => (<option key={u.value} value={u.value}>{u.label}</option>))}</select></div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t.phone}</label>
+                                <input type="tel" placeholder="0911..." className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm" value={formData.contactPhone} onChange={e => setFormData({...formData, contactPhone: e.target.value})} />
+                                <p className="text-[10px] text-gray-400 mt-1 ml-1">Defaults to your profile number. Edit to use a different number for this ad.</p>
+                            </div>
                         </div>
                     )}
                     {step === 2 && (
                         <div className="grid grid-cols-2 gap-4">
                             <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t.category}</label><select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm cursor-pointer" value={formData.mainCategory} onChange={e => setFormData({...formData, mainCategory: e.target.value, subCategory: ''})}><option value="">Select</option>{mainCategories.map(cat => <option key={cat.slug} value={cat.slug}>{cat.name}</option>)}</select></div>
-                            <div><label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">{t.subCategory}</label><select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm disabled:opacity-50 cursor-pointer" value={formData.subCategory} onChange={e => setFormData({...formData, subCategory: e.target.value})} disabled={!formData.mainCategory}><option value="">Select</option>{subCats.map(sub => <option key={sub.value} value={sub.value}>{sub.label}</option>)}</select></div>
+                            <div><label className="block text-[10px] font-bold text-gray-400 uppercase ml-1">{t.subCategory}</label><select required className="w-full border border-gray-300 dark:border-dark-border rounded-lg p-3 bg-white dark:bg-dark-bg text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-tumbi-500 outline-none text-sm disabled:opacity-50 cursor-pointer" value={formData.subCategory} onChange={e => setFormData({...formData, subCategory: e.target.value})} disabled={!formData.mainCategory}><option value="">Select</option>{subCats.map(sub => <option key={sub.value} value={sub.value}>{sub.label}</option>)}</select></div>
                         </div>
                     )}
                     {step === 3 && (
@@ -492,7 +511,10 @@ export const VendorProfileView = ({ vendorId, listings, onBack, onOpenListing, l
                 <div className="bg-white dark:bg-dark-card rounded-xl p-6 mb-8 flex items-center space-x-4 shadow-sm">
                     <Avatar src={vendorImage} name={vendorName} size="lg" />
                     <div>
-                        <div className="flex items-center space-x-2"><h3 className="text-xl font-bold dark:text-dark-text">{vendorName}</h3>{isVerified && <VerifiedIcon className="w-5 h-5 text-blue-500" />}</div>
+                        <div className="flex items-center space-x-2">
+                            <h3 className="text-xl font-bold dark:text-dark-text">{vendorName}</h3>
+                            {isVerified && <VerifiedIcon className="w-5 h-5 text-blue-500" />}
+                        </div>
                         <p className="text-sm text-gray-500">{t.activeListings}: {vendorListings.length}</p>
                     </div>
                 </div>
@@ -657,35 +679,135 @@ export const ChatConversationView = ({ session, user, onBack, embedded = false, 
 // --- Detail View ---
 export const DetailView = ({ listing, onBack, isSaved, onToggleSave, user, onEdit, onChat, onOpenVendor, language }: { listing: Listing | null; onBack: () => void; isSaved: boolean; onToggleSave: (id: string) => void; user: User | null; onEdit: (listing: Listing) => void; onChat: (listing: Listing) => void; onOpenVendor?: (id: string) => void; language: Language }) => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [touchEnd, setTouchEnd] = useState<number | null>(null);
     const t = translations[language];
+
     if (!listing) return <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"><RefreshCwIcon className="w-10 h-10 text-white animate-spin" /></div>;
 
     const isOwner = user && String(user.id) === listing.sellerId;
     const imageUrls = Array.isArray(listing.imageUrls) ? listing.imageUrls : [];
     const { mainLabel, subLabel } = getCategoryLabel(listing.mainCategory, listing.subCategory, language);
 
+    // Swipe Logic
+    const minSwipeDistance = 50;
+    const onTouchStart = (e: React.TouchEvent) => { setTouchEnd(null); setTouchStart(e.targetTouches[0].clientX); };
+    const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
+    const onTouchEnd = () => {
+        if (!touchStart || !touchEnd) return;
+        const distance = touchStart - touchEnd;
+        if (distance > minSwipeDistance) nextImage();
+        if (distance < -minSwipeDistance) prevImage();
+    };
+
+    const nextImage = () => imageUrls.length > 1 && setCurrentImageIndex(prev => (prev + 1) % imageUrls.length);
+    const prevImage = () => imageUrls.length > 1 && setCurrentImageIndex(prev => (prev - 1 + imageUrls.length) % imageUrls.length);
+
+    // Share logic
+    const handleShare = async () => {
+        try {
+            const shareUrl = `${window.location.origin}/?listing=${listing.shareSlug || listing.id}`;
+            await Share.share({
+                title: listing.title,
+                text: `${listing.title} - ETB ${listing.price.toLocaleString()}\nCheck this out on Tumbi!`,
+                url: shareUrl,
+                dialogTitle: 'Share Listing',
+            });
+        } catch (err) { console.error("Share failed:", err); }
+    };
+
+    // Strict validation function: at least 9 digits
+    const isValidPhone = (phone?: string) => {
+        if (!phone) return false;
+        const digits = phone.replace(/\D/g, '');
+        return digits.length >= 9;
+    };
+
+    const listingPhone = listing.contact_phone;
+    const sellerPhone = listing.sellerPhone;
+    const callNumber = isValidPhone(listingPhone) ? listingPhone : sellerPhone;
+
     return (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-2 backdrop-blur-sm">
             <div className="bg-white dark:bg-dark-bg w-full max-w-4xl max-h-[95vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden relative">
-                <button onClick={onBack} className="absolute top-4 right-4 z-50 p-2 bg-black/20 text-white rounded-full"><XIcon className="w-5 h-5" /></button>
-                <div className="w-full md:w-3/5 h-[35vh] md:h-auto bg-black flex items-center justify-center">
-                    <img src={imageUrls[currentImageIndex]} alt={listing.title} className="max-h-full max-w-full object-contain" />
+                <div className="absolute top-4 right-4 z-[60] flex space-x-2">
+                    <button onClick={handleShare} className="p-2 bg-black/20 text-white rounded-full hover:bg-black/40 transition-colors"><ShareIcon className="w-5 h-5" /></button>
+                    <button onClick={onBack} className="p-2 bg-black/20 text-white rounded-full hover:bg-black/40 transition-colors"><XIcon className="w-5 h-5" /></button>
                 </div>
+                
+                {/* Image Section */}
+                <div className="w-full md:w-3/5 h-[40vh] md:h-auto bg-black flex items-center justify-center relative group select-none"
+                    onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+                    
+                    <img src={imageUrls[currentImageIndex]} alt={listing.title} className="max-h-full max-w-full object-contain" draggable="false" />
+                    
+                    {/* PC Navigation Buttons */}
+                    {imageUrls.length > 1 && (
+                        <>
+                            <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/30 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/50">
+                                <ChevronLeftIcon className="w-6 h-6" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/30 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/50">
+                                <ChevronRightIcon className="w-6 h-6" />
+                            </button>
+                            
+                            {/* Dots Indicator */}
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-1.5">
+                                {imageUrls.map((_, i) => (
+                                    <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentImageIndex ? 'bg-white w-4' : 'bg-white/40'}`} />
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </div>
+
                 <div className="flex-1 flex flex-col bg-white dark:bg-dark-card overflow-hidden">
                     <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                        <div className="flex items-center justify-between"><div className="flex gap-1"><span className="px-2 py-1 bg-gray-100 dark:bg-dark-border text-[9px] font-bold uppercase rounded dark:text-dark-text">{mainLabel}</span><span className="px-2 py-1 bg-tumbi-100 dark:bg-tumbi-900/30 text-tumbi-700 text-[9px] font-bold uppercase rounded">{subLabel}</span></div>
-                        <button onClick={() => onToggleSave(String(listing.id))} className={`p-2 rounded-full ${isSaved ? 'text-tumbi-600' : 'text-gray-400'}`}><BookmarkIcon className="w-6 h-6" filled={isSaved} /></button></div>
-                        <h1 className="text-2xl font-bold dark:text-dark-text">{listing.title}</h1>
-                        <div className="text-2xl font-bold text-tumbi-600">ETB {listing.price.toLocaleString()} <span className="text-sm font-normal text-gray-500">/{getUnitDisplay(listing.unit, language)}</span></div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex gap-1">
+                                <span className="px-2 py-1 bg-gray-100 dark:bg-dark-border text-[9px] font-bold uppercase rounded text-gray-600 dark:text-dark-text">{mainLabel}</span>
+                                <span className="px-2 py-1 bg-tumbi-50 dark:bg-tumbi-900/30 text-tumbi-600 text-[9px] font-bold uppercase rounded">{subLabel}</span>
+                            </div>
+                            <button onClick={() => onToggleSave(String(listing.id))} className={`p-2 rounded-full ${isSaved ? 'text-tumbi-600' : 'text-gray-400'}`}><BookmarkIcon className="w-6 h-6" filled={isSaved} /></button>
+                        </div>
+                        
+                        <div className="flex items-start justify-between">
+                            <h1 className="text-2xl font-bold dark:text-dark-text leading-tight">{listing.title}</h1>
+                            {listing.isVerified && <div className="ml-2 text-blue-500"><VerifiedIcon className="w-6 h-6" /></div>}
+                        </div>
+
+                        <div className="text-2xl font-black text-tumbi-600">ETB {listing.price.toLocaleString()} <span className="text-sm font-normal text-gray-500">/{getUnitDisplay(listing.unit, language)}</span></div>
+                        
                         <div className="flex items-center space-x-2 text-sm text-gray-500"><MapPinIcon className="w-4 h-4" /><span>{listing.location}</span></div>
-                        <div className="space-y-2"><h3 className="font-bold text-xs uppercase text-gray-400">{t.description}</h3><p className="text-sm text-gray-700 dark:text-dark-subtext whitespace-pre-line">{listing.description}</p></div>
-                        <div className="pt-4 border-t cursor-pointer" onClick={() => listing.sellerId && onOpenVendor?.(listing.sellerId)}>
-                            <div className="flex items-center space-x-3"><Avatar src={listing.sellerImage} name={listing.sellerName} size="md" /><div><p className="font-bold dark:text-dark-text">{listing.sellerCompanyName || listing.sellerName}</p><p className="text-xs text-tumbi-600">{t.viewVendor}</p></div></div>
+                        
+                        {callNumber && (
+                            <div className="flex items-center space-x-2 text-sm text-tumbi-600 font-bold bg-tumbi-50 dark:bg-tumbi-900/20 p-3 rounded-xl border border-tumbi-100 dark:border-tumbi-800">
+                                <PhoneIcon className="w-4 h-4" />
+                                <span>{callNumber}</span>
+                            </div>
+                        )}
+
+                        <div className="space-y-2"><h3 className="font-bold text-xs uppercase text-gray-400">{t.description}</h3><p className="text-sm text-gray-700 dark:text-dark-subtext whitespace-pre-line leading-relaxed">{listing.description}</p></div>
+                        
+                        <div className="pt-6 mt-6 border-t">
+                            <div className="flex items-center justify-between group cursor-pointer" onClick={() => listing.sellerId && onOpenVendor?.(listing.sellerId)}>
+                                <div className="flex items-center space-x-3">
+                                    <Avatar src={listing.sellerImage} name={listing.sellerName} size="md" />
+                                    <div>
+                                        <div className="flex items-center space-x-1">
+                                            <p className="font-bold dark:text-dark-text">{listing.sellerCompanyName || listing.sellerName}</p>
+                                            {listing.isVerified && <VerifiedIcon className="w-4 h-4 text-blue-500" />}
+                                        </div>
+                                        <p className="text-xs text-tumbi-600 font-medium group-hover:underline">View all items</p>
+                                    </div>
+                                </div>
+                                <ChevronRightIcon className="w-5 h-5 text-gray-400 group-hover:text-tumbi-600" />
+                            </div>
                         </div>
                     </div>
                     <div className="p-6 border-t bg-gray-50 dark:bg-dark-bg/50">
-                        {isOwner ? (<button onClick={() => onEdit(listing)} className="w-full bg-gray-900 text-white font-bold py-3 rounded-xl">{t.edit}</button>) : 
-                            (<div className="grid grid-cols-2 gap-3"><a href={`tel:${listing.sellerPhone}`} className="flex items-center justify-center border-2 border-tumbi-500 text-tumbi-600 font-bold py-3 rounded-xl">{t.call}</a><button onClick={() => onChat(listing)} className="bg-tumbi-600 text-white font-bold py-3 rounded-xl">{t.chat}</button></div>)}
+                        {isOwner ? (<button onClick={() => onEdit(listing)} className="w-full bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-black transition-colors">{t.edit}</button>) : 
+                            (<div className="grid grid-cols-2 gap-3"><a href={`tel:${callNumber}`} className="flex items-center justify-center border-2 border-tumbi-500 text-tumbi-600 font-bold py-3 rounded-xl hover:bg-tumbi-50 transition-colors">{t.call}</a><button onClick={() => onChat(listing)} className="bg-tumbi-600 text-white font-bold py-3 rounded-xl hover:bg-tumbi-700 transition-colors">{t.chat}</button></div>)}
                     </div>
                 </div>
             </div>

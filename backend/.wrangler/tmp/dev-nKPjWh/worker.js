@@ -35,7 +35,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// .wrangler/tmp/bundle-ctjjFs/checked-fetch.js
+// .wrangler/tmp/bundle-1EUf5v/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -53,7 +53,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-ctjjFs/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-1EUf5v/checked-fetch.js"() {
     "use strict";
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
@@ -1914,11 +1914,11 @@ var require_bcrypt = __commonJS({
   }
 });
 
-// .wrangler/tmp/bundle-ctjjFs/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-1EUf5v/middleware-loader.entry.ts
 init_checked_fetch();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-ctjjFs/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-1EUf5v/middleware-insertion-facade.js
 init_checked_fetch();
 init_modules_watch_stub();
 
@@ -10884,7 +10884,8 @@ app.get("/api/listings", async (c) => {
       sellerId: String(r.user_id),
       sellerImage: r.sellerImage,
       sellerCompanyName: r.sellerCompanyName,
-      isVerified: r.isVerified
+      isVerified: r.isVerified,
+      contactPhone: r.contact_phone
     })));
   } catch (err) {
     console.error("Listings Fetch Error:", err.message);
@@ -10927,7 +10928,8 @@ app.get("/api/listings/:id", async (c) => {
     sellerId: String(r.user_id),
     sellerImage: r.sellerImage,
     sellerCompanyName: r.sellerCompanyName,
-    isVerified: r.isVerified
+    isVerified: r.isVerified,
+    contactPhone: r.contact_phone
   });
 });
 app.get("/api/share/:slug", async (c) => {
@@ -10953,7 +10955,7 @@ app.post("/api/listings", async (c) => {
   const final = await sql`UPDATE listings SET share_slug = ${shareSlug} WHERE id = ${newId} RETURNING *`;
   const fullListing = { ...final[0], imageUrls: Array.isArray(imageUrls) ? imageUrls : [], price, unit, title, location, description, contact_phone: contactPhone || user.phone };
   c.executionCtx.waitUntil(postToTelegram(fullListing, c.env));
-  return c.json({ ...final[0], id: String(final[0].id) });
+  return c.json({ ...final[0], id: String(final[0].id), contactPhone: final[0].contact_phone });
 });
 app.put("/api/listings/:id", async (c) => {
   const user = c.get("user");
@@ -10992,7 +10994,7 @@ app.put("/api/listings/:id", async (c) => {
     const fullListing = { ...result[0], imageUrls: result[0].image_url ? result[0].image_url.split(",") : [], price: result[0].price, unit: result[0].unit, title: result[0].title, location: result[0].location, description: result[0].description, contact_phone: result[0].contact_phone };
     c.executionCtx.waitUntil(postToTelegram(fullListing, c.env));
   }
-  return c.json({ ...result[0], id: String(result[0].id) });
+  return c.json({ ...result[0], id: String(result[0].id), contactPhone: result[0].contact_phone });
 });
 app.delete("/api/listings/:id", async (c) => {
   const user = c.get("user");
@@ -11283,7 +11285,7 @@ var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
 
-// .wrangler/tmp/bundle-ctjjFs/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-1EUf5v/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default
 ];
@@ -11316,7 +11318,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-ctjjFs/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-1EUf5v/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

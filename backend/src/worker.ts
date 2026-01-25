@@ -287,7 +287,7 @@ app.get('/api/listings', async (c) => {
         const subCategory = c.req.query('subCategory');
         const city = c.req.query('city');
         const search = c.req.query('search');
-        const sortBy = c.req.query('sortBy') || 'date-desc';
+        const sortBy = c.req.query('sortBy') || 'popular';
         const userId = c.req.query('userId');
 
         let query = `
@@ -304,10 +304,11 @@ app.get('/api/listings', async (c) => {
         if (userId) { params.push(userId); query += ` AND l.user_id = $${params.length}`; }
 
         let orderClause = ` ORDER BY u.is_verified DESC`;
-        if (sortBy === 'price-asc') orderClause += `, l.price ASC`;
+        if (sortBy === 'popular') orderClause += `, l.views DESC, l.id DESC`;
+        else if (sortBy === 'price-asc') orderClause += `, l.price ASC`;
         else if (sortBy === 'price-desc') orderClause += `, l.price DESC`;
         else if (sortBy === 'date-asc') orderClause += `, l.id ASC`; 
-        else orderClause += `, l.id DESC`; 
+        else orderClause += `, l.id DESC`; // date-desc (default fallback)
 
         query += orderClause;
         
@@ -325,7 +326,8 @@ app.get('/api/listings', async (c) => {
             sellerId: String(r.user_id),
             sellerImage: r.sellerImage,
             sellerCompanyName: r.sellerCompanyName,
-            isVerified: r.isVerified
+            isVerified: r.isVerified,
+            contact_phone: r.contact_phone
         })));
     } catch (err: any) {
         console.error("Listings Fetch Error:", err.message);
@@ -370,7 +372,8 @@ app.get('/api/listings/:id', async (c) => {
         sellerId: String(r.user_id),
         sellerImage: r.sellerImage,
         sellerCompanyName: r.sellerCompanyName,
-        isVerified: r.isVerified
+        isVerified: r.isVerified,
+        contact_phone: r.contact_phone
     });
 });
 
@@ -384,14 +387,14 @@ app.get('/api/share/:slug', async (c) => {
 
 app.post('/api/listings', async (c) => {
     const user = c.get('user');
-    const { title, price, unit, location, mainCategory, subCategory, description, imageUrls, contactPhone } = await c.req.json();
+    const { title, price, unit, location, mainCategory, subCategory, description, imageUrls, contact_phone } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     
     const imageString = Array.isArray(imageUrls) ? imageUrls.join(',') : '';
 
     const result = await sql`
         INSERT INTO listings (title, price, unit, location, main_category, sub_category, description, image_url, user_id, contact_phone) 
-        VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageString}, ${parseInt(user.id)}, ${contactPhone || null}) 
+        VALUES (${title}, ${price}, ${unit}, ${location}, ${mainCategory}, ${subCategory}, ${description}, ${imageString}, ${parseInt(user.id)}, ${contact_phone || null}) 
         RETURNING id
     `;
     
@@ -400,7 +403,7 @@ app.post('/api/listings', async (c) => {
     
     const final = await sql`UPDATE listings SET share_slug = ${shareSlug} WHERE id = ${newId} RETURNING *`;
     
-    const fullListing = { ...final[0], imageUrls: Array.isArray(imageUrls) ? imageUrls : [], price, unit, title, location, description, contact_phone: contactPhone || user.phone };
+    const fullListing = { ...final[0], imageUrls: Array.isArray(imageUrls) ? imageUrls : [], price, unit, title, location, description, contact_phone: contact_phone || user.phone };
     c.executionCtx.waitUntil(postToTelegram(fullListing, c.env));
     
     return c.json({ ...final[0], id: String(final[0].id) });
@@ -409,7 +412,7 @@ app.post('/api/listings', async (c) => {
 app.put('/api/listings/:id', async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
-    const { title, price, unit, location, mainCategory, subCategory, description, imageUrls, status, contactPhone } = await c.req.json();
+    const { title, price, unit, location, mainCategory, subCategory, description, imageUrls, status, contact_phone } = await c.req.json();
     const sql = neon(c.env.DATABASE_URL);
     
     const shareSlug = generateShareSlug(title, parseInt(id));
@@ -422,7 +425,7 @@ app.put('/api/listings/:id', async (c) => {
                 title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
                 main_category = ${mainCategory}, sub_category = ${subCategory}, 
                 description = ${description}, image_url = ${imageString}, 
-                status = ${status || 'active'}, contact_phone = ${contactPhone || null},
+                status = ${status || 'active'}, contact_phone = ${contact_phone || null},
                 share_slug = ${shareSlug}
             WHERE id = ${parseInt(id)}
             RETURNING *
@@ -433,7 +436,7 @@ app.put('/api/listings/:id', async (c) => {
                 title = ${title}, price = ${price}, unit = ${unit}, location = ${location}, 
                 main_category = ${mainCategory}, sub_category = ${subCategory}, 
                 description = ${description}, image_url = ${imageString}, 
-                status = ${status || 'active'}, contact_phone = ${contactPhone || null},
+                status = ${status || 'active'}, contact_phone = ${contact_phone || null},
                 share_slug = ${shareSlug}
             WHERE id = ${parseInt(id)} AND user_id = ${parseInt(user.id)} 
             RETURNING *

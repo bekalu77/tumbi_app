@@ -33,7 +33,7 @@ export interface Listing {
   status?: string;
   views?: number;
   shareSlug?: string;
-  contactPhone?: string;
+  contact_phone?: string;
 }
 
 export interface Category {

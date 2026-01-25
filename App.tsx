@@ -35,14 +35,14 @@ export default function App() {
   const [selectedSubCategory, setSelectedSubCategory] = useState('all');
   const [searchInput, setSearchInput] = useState('');
   const [selectedCity, setSelectedCity] = useState(t.allCities);
-  const [sortBy, setSortBy] = useState('date-desc');
+  const [sortBy, setSortBy] = useState('popular');
   
   const [appliedFilters, setAppliedFilters] = useState({
     search: '',
     mainCategory: 'all',
     subCategory: 'all',
     city: 'All Cities', // Always use English for API filter stability
-    sortBy: 'date-desc'
+    sortBy: 'popular'
   });
 
   const [viewState, setViewState] = useState<ViewState>('home');
@@ -192,8 +192,8 @@ export default function App() {
   const handleApplyFilters = () => setAppliedFilters(prev => ({ ...prev, search: searchInput }));
 
   const resetAllFilters = () => {
-    setSelectedMainCategory('all'); setSelectedSubCategory('all'); setSelectedCity(translations[language].allCities); setSearchInput(''); setSortBy('date-desc');
-    setAppliedFilters({ search: '', mainCategory: 'all', subCategory: 'all', city: 'All Cities', sortBy: 'date-desc' });
+    setSelectedMainCategory('all'); setSelectedSubCategory('all'); setSelectedCity(translations[language].allCities); setSearchInput(''); setSortBy('popular');
+    setAppliedFilters({ search: '', mainCategory: 'all', subCategory: 'all', city: 'All Cities', sortBy: 'popular' });
     setViewState('home');
   };
 
@@ -372,7 +372,7 @@ export default function App() {
         }} onOpenVendor={(id) => { setSelectedVendorId(id); setViewState('vendor-profile'); }} language={language} />}
         
         {viewState === 'vendor-profile' && selectedVendorId && <VendorProfileView vendorId={selectedVendorId} listings={listings} onBack={() => setViewState('details')} onOpenListing={openListing} language={language} />}
-        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isSavingListing} language={language} />}
+        {(viewState === 'sell' || viewState === 'edit') && <AddListingForm initialData={editingListing} userPhone={user?.phone} onClose={() => setViewState('home')} onSubmit={handleSaveListing} onUploadPhotos={uploadPhotos} isSubmitting={isSavingListing} language={language} />}
         
         <header className="sticky top-0 z-30 bg-tumbi-500 dark:bg-dark-card shadow-md">
             <div className="max-w-6xl mx-auto px-4 py-3">
@@ -397,7 +397,7 @@ export default function App() {
                 <>
                 <div className="mb-6 flex justify-end">
                     <select className="bg-white dark:bg-dark-card border border-gray-200 dark:border-dark-border rounded-lg px-3 h-10 shadow-sm text-xs font-bold dark:text-dark-text outline-none cursor-pointer" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-                        <option value="date-desc">{t.newest}</option><option value="date-asc">{t.oldest}</option><option value="price-asc">{t.priceLowHigh}</option><option value="price-desc">{t.priceHighLow}</option>
+                        <option value="popular">{t.popular}</option><option value="date-desc">{t.newest}</option><option value="date-asc">{t.oldest}</option><option value="price-asc">{t.priceLowHigh}</option><option value="price-desc">{t.priceHighLow}</option>
                     </select>
                 </div>
                 {isListingsLoading ? (
